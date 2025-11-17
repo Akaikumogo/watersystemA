@@ -1,0 +1,195 @@
+# ============================================
+# Smart Water System - Git Ignore
+# ============================================
+
+# ============================================
+# Node.js / npm / yarn
+# ============================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Package manager lock files (optional - uncomment if you want to ignore)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# ============================================
+# Environment Variables (KEEP .env files!)
+# ============================================
+# .env files are NOT ignored - they should be committed
+# Only ignore .env.local, .env.*.local for local overrides
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ============================================
+# Build outputs
+# ============================================
+dist/
+build/
+out/
+.next/
+.nuxt/
+.output/
+.vite/
+*.tsbuildinfo
+
+# ============================================
+# IDE / Editor
+# ============================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
+
+# ============================================
+# OS Files
+# ============================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ============================================
+# Logs
+# ============================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ============================================
+# Testing
+# ============================================
+coverage/
+.nyc_output/
+*.lcov
+.jest/
+
+# ============================================
+# Temporary files
+# ============================================
+*.tmp
+*.temp
+.cache/
+.temp/
+tmp/
+temp/
+
+# ============================================
+# NestJS specific
+# ============================================
+smart_water_backend/dist/
+smart_water_backend/.env
+smart_water_backend/.env.*
+!smart_water_backend/.env.example
+
+# ============================================
+# React / Vite specific
+# ============================================
+admin-panel/dist/
+admin-panel/.env
+admin-panel/.env.*
+!admin-panel/.env.example
+
+user-frontend/dist/
+user-frontend/.env
+user-frontend/.env.*
+!user-frontend/.env.example
+
+# ============================================
+# Capacitor (Mobile)
+# ============================================
+user-frontend/android/
+user-frontend/ios/
+user-frontend/.capacitor/
+user-frontend/capacitor.config.json.bak
+
+# ============================================
+# TypeScript
+# ============================================
+*.tsbuildinfo
+.tsbuildinfo
+
+# ============================================
+# ESLint / Prettier
+# ============================================
+.eslintcache
+.prettiercache
+
+# ============================================
+# Misc
+# ============================================
+*.pem
+*.key
+*.cert
+*.crt
+*.p12
+*.pfx
+
+# ============================================
+# Database
+# ============================================
+*.db
+*.sqlite
+*.sqlite3
+
+# ============================================
+# Arduino / ESP32
+# ============================================
+hardware/esp32/.vscode/
+hardware/esp32/build/
+hardware/esp32/*.hex
+hardware/esp32/*.bin
+hardware/esp32/*.elf
+
+# ============================================
+# Backup files
+# ============================================
+*.bak
+*.backup
+*.old
+*.orig
+
+# ============================================
+# Documentation builds
+# ============================================
+docs/_build/
+docs/.doctrees/
+
+# ============================================
+# Python (if any scripts)
+# ============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# ============================================
+# Keep .env.example files
+# ============================================
+!.env.example
+!**/.env.example
