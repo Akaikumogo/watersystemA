@@ -33,6 +33,7 @@ import {
 	DeviceDeleteResponseDto,
 	AssignUsersResponseDto
 } from './dto/device-response.dto';
+import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('devices')
 @ApiBearerAuth('JWT-auth')
@@ -40,6 +41,21 @@ import {
 @Controller('devices')
 export class DevicesController {
 	constructor(private readonly devicesService: DevicesService) {}
+
+	@ApiOperation({
+		summary: 'Get public stats',
+		description: 'Get public statistics about devices (total, online, offline). No authentication required.'
+	})
+	@Public()
+	@Get('stats')
+	@HttpCode(HttpStatus.OK)
+	@ApiResponse({
+		status: 200,
+		description: 'Statistics retrieved successfully'
+	})
+	async getStats() {
+		return this.devicesService.getPublicStats();
+	}
 
 	@ApiOperation({
 		summary: 'Get all devices',

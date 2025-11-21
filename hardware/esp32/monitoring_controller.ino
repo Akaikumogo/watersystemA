@@ -1,4 +1,6 @@
 #include <WiFi.h>
+#include <WebServer.h>
+#include <Preferences.h>
 #include <PubSubClient.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_ST7735.h>
@@ -12,6 +14,23 @@ const char* mqttServer = "BROKER_IP";
 const int mqttPort = 1883;
 const char* mqttUser = "USERNAME";  // agar kerak bo'lsa
 const char* mqttPass = "PASSWORD";  // agar kerak bo'lsa
+
+// ------------------------ AP Mode (Configuration) ------------------------
+const char* AP_SSID = "ESP32_WaterSystem";
+const char* AP_PASS = "water123";
+bool useAPMode = false;  // true bo'lsa AP mode, false bo'lsa Station mode
+WebServer configServer(80);
+
+// ------------------------ Preferences (EEPROM) ------------------------
+Preferences preferences;
+const char* PREF_NAMESPACE = "device";
+const char* PREF_DEVICE_NAME = "name";
+const char* PREF_DEVICE_LOCATION = "location";
+const char* PREF_WIFI_SSID = "wifi_ssid";
+const char* PREF_WIFI_PASS = "wifi_pass";
+const char* PREF_MQTT_SERVER = "mqtt_server";
+const char* PREF_MQTT_USER = "mqtt_user";
+const char* PREF_MQTT_PASS = "mqtt_pass";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -61,7 +80,6 @@ float totalElectricity = 0;
 
 // ------------------------ Language ------------------------
 String currentLanguage = "uz";  // Default: O'zbek tili
-String languageTopic = "device/" + String(deviceName) + "/language/command";
 
 // ------------------------ TFT Display Variables (for optimization) ------------------------
 String prevWaterDepth = "";
@@ -73,27 +91,267 @@ String prevTimerDisplay = "";
 unsigned long lastTFTTime = 0;
 const unsigned long tftInterval = 1000;  // 1 second
 
-// ------------------------ Device Info ------------------------
-// IMPORTANT: Set this to match your device name in the backend!
-const char* deviceName = "ESP32Controller";
-const char* deviceLocation = "Remote node";
+// ------------------------ Hourly Data Publishing ------------------------
+unsigned long lastHourlyPublishTime = 0;
+const unsigned long hourlyInterval = 3600000;  // 1 hour in milliseconds
 
-// ------------------------ MQTT Topics (with device ID) ------------------------
-// Build topics with device name: device/{deviceName}/...
-String sensorTopic = "device/" + String(deviceName) + "/sensor/data";
-String motorTopic = "device/" + String(deviceName) + "/motor/command";
-String timerTopic = "device/" + String(deviceName) + "/timer/command";
-String heightTopic = "device/" + String(deviceName) + "/height/command";
-String motorSwitchTopic = "device/" + String(deviceName) + "/motor/switch";
-String statusTopic = "device/" + String(deviceName) + "/status";
+// ------------------------ Device Info ------------------------
+// Device name va location Preferences dan olinadi yoki default qiymatlar
+String deviceName = "ESP32Controller";
+String deviceLocation = "Remote node";
+
+// ------------------------ MQTT Topics (dynamic - device name o'zgarganda yangilanadi) ------------------------
+String sensorTopic;
+String motorTopic;
+String timerTopic;
+String heightTopic;
+String motorSwitchTopic;
+String statusTopic;
+String languageTopic;
+
+// MQTT topiclarni yangilash funksiyasi
+void updateMQTTTopics() {
+  sensorTopic = "device/" + deviceName + "/sensor/data";
+  motorTopic = "device/" + deviceName + "/motor/command";
+  timerTopic = "device/" + deviceName + "/timer/command";
+  heightTopic = "device/" + deviceName + "/height/command";
+  motorSwitchTopic = "device/" + deviceName + "/motor/switch";
+  statusTopic = "device/" + deviceName + "/status";
+  languageTopic = "device/" + deviceName + "/language/command";
+}
 
 // Also subscribe to global topics for backward compatibility
 const char* globalSensorTopic = "sensor/data";
 const char* globalStatusTopic = "device/status";
 
+// ------------------------ Preferences Functions ------------------------
+void loadPreferences() {
+  preferences.begin(PREF_NAMESPACE, false);
+  
+  // Device name va location ni yuklash
+  String savedName = preferences.getString(PREF_DEVICE_NAME, "");
+  String savedLocation = preferences.getString(PREF_DEVICE_LOCATION, "");
+  
+  if (savedName.length() > 0) {
+    deviceName = savedName;
+  }
+  if (savedLocation.length() > 0) {
+    deviceLocation = savedLocation;
+  }
+  
+  // WiFi va MQTT sozlamalarini yuklash (agar saqlangan bo'lsa)
+  String savedSSID = preferences.getString(PREF_WIFI_SSID, "");
+  String savedPass = preferences.getString(PREF_WIFI_PASS, "");
+  String savedMqttServer = preferences.getString(PREF_MQTT_SERVER, "");
+  
+  // Agar Preferences da saqlangan bo'lsa, ularni ishlatish
+  // Aks holda kod ichidagi default qiymatlar ishlatiladi
+  
+  preferences.end();
+  
+  // MQTT topiclarni yangilash
+  updateMQTTTopics();
+  
+  Serial.print("Loaded device name: ");
+  Serial.println(deviceName);
+  Serial.print("Loaded device location: ");
+  Serial.println(deviceLocation);
+}
+
+void saveDeviceName(String name) {
+  preferences.begin(PREF_NAMESPACE, false);
+  preferences.putString(PREF_DEVICE_NAME, name);
+  preferences.end();
+  deviceName = name;
+  updateMQTTTopics();
+  Serial.print("Device name saved: ");
+  Serial.println(deviceName);
+}
+
+void saveDeviceLocation(String location) {
+  preferences.begin(PREF_NAMESPACE, false);
+  preferences.putString(PREF_DEVICE_LOCATION, location);
+  preferences.end();
+  deviceLocation = location;
+  Serial.print("Device location saved: ");
+  Serial.println(deviceLocation);
+}
+
+// ------------------------ Web Server Handlers ------------------------
+void handleConfigRoot() {
+  const char html[] PROGMEM = R"rawliteral(
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ESP32 Sozlash</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px; }
+    .container { max-width: 500px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    h1 { color: #333; text-align: center; margin-bottom: 30px; }
+    .form-group { margin-bottom: 20px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
+    input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; font-size: 14px; }
+    button { width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; }
+    button:hover { background: #1d4ed8; }
+    .info { background: #e0f2fe; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
+    .info p { margin: 5px 0; color: #0369a1; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔧 ESP32 Sozlash</h1>
+    
+    <div class="info">
+      <p><strong>IP:</strong> <span id="ap-ip">192.168.4.1</span></p>
+      <p><strong>Joriy Device Name:</strong> <span id="current-name">ESP32Controller</span></p>
+    </div>
+    
+    <form id="configForm">
+      <div class="form-group">
+        <label for="deviceName">Device Name (MQTT topic uchun):</label>
+        <input type="text" id="deviceName" name="deviceName" placeholder="ESP32Controller" required>
+        <small style="color: #666;">Backend dagi device name bilan mos kelishi kerak</small>
+      </div>
+      
+      <div class="form-group">
+        <label for="deviceLocation">Location (Ixtiyoriy):</label>
+        <input type="text" id="deviceLocation" name="deviceLocation" placeholder="Remote node">
+      </div>
+      
+      <button type="submit">Saqlash va Qayta ishga tushirish</button>
+    </form>
+    
+    <div id="message" style="margin-top: 20px; padding: 10px; border-radius: 4px; display: none;"></div>
+  </div>
+  
+  <script>
+    // Joriy device name ni yuklash
+    fetch('/config')
+      .then(res => res.json())
+      .then(data => {
+        if (data.deviceName) {
+          document.getElementById('deviceName').value = data.deviceName;
+          document.getElementById('current-name').textContent = data.deviceName;
+        }
+        if (data.deviceLocation) {
+          document.getElementById('deviceLocation').value = data.deviceLocation;
+        }
+      });
+    
+    document.getElementById('configForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const formData = new FormData(this);
+      const data = {
+        deviceName: formData.get('deviceName'),
+        deviceLocation: formData.get('deviceLocation')
+      };
+      
+      fetch('/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      .then(res => res.json())
+      .then(result => {
+        const msgDiv = document.getElementById('message');
+        msgDiv.style.display = 'block';
+        if (result.success) {
+          msgDiv.style.background = '#d1fae5';
+          msgDiv.style.color = '#065f46';
+          msgDiv.textContent = '✅ Sozlamalar saqlandi! ESP32 qayta ishga tushmoqda...';
+          setTimeout(() => {
+            window.location.reload();
+          }, 2000);
+        } else {
+          msgDiv.style.background = '#fee2e2';
+          msgDiv.style.color = '#991b1b';
+          msgDiv.textContent = '❌ Xatolik: ' + (result.error || 'Noma\'lum xatolik');
+        }
+      })
+      .catch(err => {
+        const msgDiv = document.getElementById('message');
+        msgDiv.style.display = 'block';
+        msgDiv.style.background = '#fee2e2';
+        msgDiv.style.color = '#991b1b';
+        msgDiv.textContent = '❌ Xatolik: ' + err.message;
+      });
+    });
+  </script>
+</body>
+</html>
+)rawliteral";
+  configServer.send(200, "text/html", html);
+}
+
+void handleConfigGet() {
+  String json = "{";
+  json += "\"deviceName\":\"" + deviceName + "\",";
+  json += "\"deviceLocation\":\"" + deviceLocation + "\"";
+  json += "}";
+  configServer.send(200, "application/json", json);
+}
+
+void handleConfigPost() {
+  if (configServer.hasArg("plain")) {
+    String body = configServer.arg("plain");
+    
+    // JSON parsing (oddiy)
+    int nameStart = body.indexOf("\"deviceName\":\"") + 15;
+    int nameEnd = body.indexOf("\"", nameStart);
+    int locStart = body.indexOf("\"deviceLocation\":\"") + 18;
+    int locEnd = body.indexOf("\"", locStart);
+    
+    if (nameStart > 14 && nameEnd > nameStart) {
+      String newName = body.substring(nameStart, nameEnd);
+      if (newName.length() > 0 && newName.length() < 50) {
+        saveDeviceName(newName);
+      }
+    }
+    
+    if (locStart > 17 && locEnd > locStart) {
+      String newLocation = body.substring(locStart, locEnd);
+      if (newLocation.length() > 0) {
+        saveDeviceLocation(newLocation);
+      }
+    }
+    
+    String response = "{\"success\":true,\"message\":\"Sozlamalar saqlandi\"}";
+    configServer.send(200, "application/json", response);
+    
+    // Qayta ishga tushirish (2 soniyadan keyin)
+    delay(2000);
+    ESP.restart();
+  } else {
+    configServer.send(400, "application/json", "{\"success\":false,\"error\":\"Invalid request\"}");
+  }
+}
+
+void setupAP() {
+  WiFi.softAP(AP_SSID, AP_PASS);
+  IPAddress IP = WiFi.softAPIP();
+  Serial.print("AP IP: ");
+  Serial.println(IP);
+  
+  tft.setCursor(0, 20);
+  tft.setTextColor(ST77XX_GREEN);
+  tft.print("AP IP: ");
+  tft.println(IP);
+  
+  // Web server routes
+  configServer.on("/", handleConfigRoot);
+  configServer.on("/config", HTTP_GET, handleConfigGet);
+  configServer.on("/config", HTTP_POST, handleConfigPost);
+  configServer.begin();
+  
+  Serial.println("Configuration WebServer started");
+}
+
 // ------------------------ Setup ------------------------
 void setup() {
   Serial.begin(115200);
+  delay(100);
 
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
@@ -111,21 +369,37 @@ void setup() {
   tft.setCursor(0, 0);
   tft.println("System starting...");
 
+  // Preferences dan sozlamalarni yuklash
+  loadPreferences();
+
+  // WiFi ulanish
+  WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
   Serial.print("Connecting to WiFi...");
-  while (WiFi.status() != WL_CONNECTED) {
+  
+  int wifiAttempts = 0;
+  while (WiFi.status() != WL_CONNECTED && wifiAttempts < 20) {
     delay(500);
     Serial.print(".");
+    wifiAttempts++;
   }
-  Serial.println("Connected!");
-
-  client.setServer(mqttServer, mqttPort);
-  client.setCallback(mqttCallback);
+  
+  if (WiFi.status() != WL_CONNECTED) {
+    // WiFi ulanmadi - AP mode ga o'tamiz
+    Serial.println("\nWiFi ulanmadi, AP mode ga o'tilmoqda...");
+    useAPMode = true;
+    setupAP();
+  } else {
+    Serial.println("\nWiFi connected!");
+    Serial.print("IP: ");
+    Serial.println(WiFi.localIP());
+    
+    // MQTT sozlash
+    client.setServer(mqttServer, mqttPort);
+    client.setCallback(mqttCallback);
+  }
 
   Serial2.begin(9600, SERIAL_8N1, 16, 17);
-
-  // Wait for MQTT connection before publishing
-  // publishStatus will be called in loop() after connection
 }
 
 // ------------------------ MQTT Callback ------------------------
@@ -318,6 +592,14 @@ void publishStatus(String s) {
 
 // ------------------------ Loop ------------------------
 void loop() {
+  // AP mode bo'lsa, faqat web server ishlaydi
+  if (useAPMode) {
+    configServer.handleClient();
+    delay(10);
+    return;
+  }
+  
+  // Station mode - normal ish
   if (!client.connected()) {
     reconnect();
   } else {
@@ -332,10 +614,15 @@ void loop() {
   client.loop();
 
   updateSensors();
-  publishData();
+  
+  // Publish data every hour for reports (real-time hourly data)
+  unsigned long now = millis();
+  if (now - lastHourlyPublishTime >= hourlyInterval) {
+    publishData();
+    lastHourlyPublishTime = now;
+  }
   
   // Update TFT display every 1 second
-  unsigned long now = millis();
   if (now - lastTFTTime >= tftInterval) {
     lastTFTTime = now;
     runTFTDisplay();

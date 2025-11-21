@@ -75,7 +75,34 @@
     "electricityConsumption": "Elektr sarfi",
     "realTime": "Real vaqt",
     "connected": "Ulangan",
-    "disconnected": "Ulanmagan"
+    "disconnected": "Ulanmagan",
+    "listening": "Ovozni tinglanmoqda"
+  },
+  "settings": {
+    "title": "Sozlamalar",
+    "primaryColor": "Asosiy rang",
+    "primaryColorDescription": "Ilovaning asosiy rangini tanlang",
+    "selectColor": "Rangni tanlang",
+    "language": "Til",
+    "languageDescription": "Ilova tilini tanlang",
+    "selectLanguage": "Tilni tanlang"
+  },
+  "reports": {
+    "title": "Hisobotlar",
+    "daily": "Kunlik",
+    "weekly": "Haftalik",
+    "monthly": "Oylik",
+    "selectDate": "Sanani tanlang",
+    "selectWeekStart": "Hafta boshlanishini tanlang",
+    "selectMonth": "Oyni tanlang",
+    "load": "Yuklash",
+    "loadError": "Hisobotni yuklashda xatolik",
+    "energy": "Elektr",
+    "water": "Suv",
+    "totalEnergy": "Jami elektr",
+    "totalWater": "Jami suv",
+    "weekPeriod": "Hafta davri",
+    "noData": "Ma'lumot topilmadi"
   }
 }
 

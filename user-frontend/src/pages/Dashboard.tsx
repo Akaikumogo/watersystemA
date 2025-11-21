@@ -28,14 +28,17 @@ import {
   LogOut,
   MapPin,
   Plus,
+  Settings,
+  FileText,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useDevices } from '@/hooks/useDevices'
 import { useAuthStore } from '@/store/authStore'
 import { api } from '@/lib/api'
 import { createDeviceSchema, type CreateDeviceFormData } from '@/utils/validations'
-import { useDeviceStore } from '@/store/deviceStore'
 import { motion } from 'framer-motion'
+import { backgroundMonitorService } from '@/lib/backgroundMonitor'
+import { socketManager } from '@/lib/socket'
 
 export const Dashboard: React.FC = () => {
   const { t } = useTranslation()
@@ -43,7 +46,6 @@ export const Dashboard: React.FC = () => {
   const { logout, user } = useAuth()
   const { devices, loading, error, refetch } = useDevices()
   const { loadAuth } = useAuthStore()
-  const { setDevices } = useDeviceStore()
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -68,6 +70,39 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     loadAuth()
   }, [loadAuth])
+
+  // Start background monitoring when devices are loaded
+  useEffect(() => {
+    if (devices.length > 0 && !loading) {
+      backgroundMonitorService.startMonitoring(devices)
+    }
+
+    return () => {
+      backgroundMonitorService.stopMonitoring()
+    }
+  }, [devices, loading])
+
+  // Listen for device updates via WebSocket
+  useEffect(() => {
+    const socket = socketManager.getSocket()
+    if (!socket) {
+      return
+    }
+
+    const handleDeviceUpdate = (device: any) => {
+      // Update background monitor with new device state
+      const updatedDevices = devices.map(d => 
+        d._id === device._id ? { ...d, ...device } : d
+      )
+      backgroundMonitorService.updateDevices(updatedDevices)
+    }
+
+    socket.on('device:update', handleDeviceUpdate)
+
+    return () => {
+      socket.off('device:update', handleDeviceUpdate)
+    }
+  }, [devices])
 
   const handleLogout = async () => {
     await logout()
@@ -144,46 +179,70 @@ export const Dashboard: React.FC = () => {
               {user?.username}
             </p>
           </div>
-          <Button
-            isIconOnly
-            variant="light"
-            onPress={handleLogout}
-            aria-label={t('common.logout')}
-          >
-            <LogOut className="w-5 h-5" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              isIconOnly
+              variant="light"
+              onPress={() => navigate('/reports')}
+              aria-label={t('reports.title')}
+            >
+              <FileText className="w-5 h-5" />
+            </Button>
+            <Button
+              isIconOnly
+              variant="light"
+              onPress={() => navigate('/settings')}
+              aria-label={t('settings.title')}
+            >
+              <Settings className="w-5 h-5" />
+            </Button>
+            <Button
+              isIconOnly
+              variant="light"
+              onPress={handleLogout}
+              aria-label={t('common.logout')}
+            >
+              <LogOut className="w-5 h-5" />
+            </Button>
+          </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         {/* Stats Cards */}
         <div className="grid grid-cols-2 gap-4">
-          <Card>
+          <Card className="premium-card">
             <CardBody className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1 font-medium">
                     {t('dashboard.myDevices')}
                   </p>
-                  <p className="text-2xl font-bold">{devices.length}</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {devices.length}
+                  </p>
                 </div>
-                <Droplet className="w-8 h-8 text-primary" />
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Droplet className="w-6 h-6" style={{ color: 'var(--primary-color)' }} />
+                </div>
               </div>
             </CardBody>
           </Card>
 
-          <Card>
+          <Card className="premium-card">
             <CardBody className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-1 font-medium">
                     {t('dashboard.online')}
                   </p>
-                  <p className="text-2xl font-bold">
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
                     {devices.filter((d) => d.status === 'ONLINE').length}
                   </p>
                 </div>
-                <Wifi className="w-8 h-8 text-success" />
+                <div className="p-2 rounded-lg bg-success/10">
+                  <Wifi className="w-6 h-6 text-success" />
+                </div>
               </div>
             </CardBody>
           </Card>
@@ -234,7 +293,7 @@ export const Dashboard: React.FC = () => {
                   <Card
                     isPressable
                     onPress={() => navigate(`/device/${device._id}`)}
-                    className="hover:shadow-lg transition-shadow"
+                    className="premium-card"
                   >
                     <CardHeader className="flex items-start justify-between pb-2">
                       <div className="flex-1">

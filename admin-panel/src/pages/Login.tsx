@@ -17,7 +17,7 @@ interface LoginFormData {
 export const Login: React.FC = () => {
   const { t } = useTranslation()
   const { login } = useAuth()
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, initialize } = useAuthStore()
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
@@ -27,11 +27,20 @@ export const Login: React.FC = () => {
     formState: { errors },
   } = useForm<LoginFormData>()
 
+  // Check authentication and redirect if already logged in
   useEffect(() => {
-    if (isAuthenticated) {
+    initialize()
+    
+    // Check localStorage directly - this is the source of truth
+    const token = localStorage.getItem('token')
+    const user = localStorage.getItem('user')
+    
+    if (token && user) {
+      // Use navigate instead of window.location to avoid full page reload
       window.location.href = '/dashboard'
     }
-  }, [isAuthenticated])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const onSubmit = async (data: LoginFormData) => {
     setError(null)

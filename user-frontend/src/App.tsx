@@ -7,7 +7,10 @@ import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Dashboard } from './pages/Dashboard';
 import { DeviceDetail } from './pages/DeviceDetail';
+import { Settings } from './pages/Settings';
+import { Reports } from './pages/Reports';
 import { socketManager } from './lib/socket';
+import { useThemeStore } from '@/store/themeStore';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading, loadAuth } = useAuthStore();
@@ -71,11 +74,14 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
 function App() {
   const { i18n } = useTranslation();
   const { loadLanguage, language } = useLanguageStore();
+  const { loadTheme } = useThemeStore();
 
   useEffect(() => {
     // Load language from storage (default: Uzbek)
     loadLanguage();
-  }, [loadLanguage]);
+    // Load theme from storage
+    loadTheme();
+  }, [loadLanguage, loadTheme]);
 
   useEffect(() => {
     // Sync i18n with store
@@ -114,6 +120,22 @@ function App() {
           element={
             <ProtectedRoute>
               <DeviceDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <ProtectedRoute>
+              <Reports />
             </ProtectedRoute>
           }
         />

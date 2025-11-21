@@ -39,10 +39,13 @@ export const Login: React.FC = () => {
   const toggleVisibility = () => setIsVisible(!isVisible)
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-gray-900 dark:to-gray-800">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50 dark:bg-gray-900">
+      <Card className="w-full max-w-md premium-card">
         <CardHeader className="flex flex-col items-center gap-2 pt-8">
-          <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center mb-2">
+          <div 
+            className="w-16 h-16 rounded-full flex items-center justify-center mb-2"
+            style={{ backgroundColor: 'var(--primary-color)' }}
+          >
             <Droplet className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-2xl font-bold">{t('auth.title')}</h1>
@@ -118,7 +121,8 @@ export const Login: React.FC = () => {
               </span>
               <Link
                 to="/register"
-                className="text-primary hover:underline font-medium"
+                className="hover:underline font-medium"
+                style={{ color: 'var(--primary-color)' }}
               >
                 {t('common.register')}
               </Link>

@@ -169,6 +169,25 @@ class ApiClient {
     );
     return data.device;
   }
+
+  // Reports
+  async getDailyReport(date?: string) {
+    const params = date ? { date } : {};
+    const { data } = await this.client.get('/reports/daily', { params });
+    return data;
+  }
+
+  async getWeeklyReport(weekStart?: string) {
+    const params = weekStart ? { weekStart } : {};
+    const { data } = await this.client.get('/reports/weekly', { params });
+    return data;
+  }
+
+  async getMonthlyReport(month?: string) {
+    const params = month ? { month } : {};
+    const { data } = await this.client.get('/reports/monthly', { params });
+    return data;
+  }
 }
 
 export const api = new ApiClient();

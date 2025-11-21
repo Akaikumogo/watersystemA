@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Users, LayoutDashboard, LogOut, Droplet } from 'lucide-react'
+import { Users, LayoutDashboard, LogOut, Droplet, Globe, Mail } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/utils/cn'
 
@@ -12,6 +12,7 @@ export const Sidebar: React.FC = () => {
     { path: '/dashboard', label: t('dashboard.title'), icon: LayoutDashboard },
     { path: '/dashboard/users', label: t('dashboard.users'), icon: Users },
     { path: '/dashboard/devices', label: t('dashboard.devices'), icon: Droplet },
+    { path: '/dashboard/contacts', label: 'Contact Messages', icon: Mail },
   ]
 
   return (
@@ -54,7 +55,17 @@ export const Sidebar: React.FC = () => {
         })}
       </nav>
 
-      <div className="p-4 border-t border-gray-200">
+      <div className="p-4 border-t border-gray-200 space-y-2">
+        <a
+          href={import.meta.env.VITE_LANDING_URL || 'http://localhost:3000'}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors focus-visible-ring"
+          aria-label="Landing Page"
+        >
+          <Globe className="w-5 h-5" aria-hidden="true" />
+          <span>Landing Page</span>
+        </a>
         <button
           onClick={logout}
           className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors focus-visible-ring"

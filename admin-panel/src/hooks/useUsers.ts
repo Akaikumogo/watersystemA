@@ -22,7 +22,8 @@ export const useUsers = () => {
 
   useEffect(() => {
     fetchUsers()
-  }, [fetchUsers])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const createUser = useCallback(async (dto: CreateUserDto) => {
     try {

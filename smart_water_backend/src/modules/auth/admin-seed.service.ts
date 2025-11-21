@@ -48,7 +48,7 @@ export class AdminSeedService implements OnModuleInit {
 				this.logger.log('Removed legacy unique email index to prevent duplicate null errors.');
 			}
 		} catch (error) {
-			this.logger.warn(`Failed to check/drop legacy email index: ${error?.message ?? error}`);
+      this.logger.warn(`Failed to check/drop legacy email index: ${error instanceof Error ? error.message : String(error)}`);
 		}
 	}
 }

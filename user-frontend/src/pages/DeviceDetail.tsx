@@ -34,11 +34,14 @@ import {
   Clock,
   Settings,
   RefreshCw,
+  Mic,
+  MicOff,
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useDeviceStore } from '@/store/deviceStore'
 import { useDevices } from '@/hooks/useDevices'
 import { socketManager } from '@/lib/socket'
+import { useVoiceCommand } from '@/hooks/useVoiceCommand'
 import { motion } from 'framer-motion'
 import type { Device, User } from '@/types'
 
@@ -65,6 +68,41 @@ export const DeviceDetail: React.FC = () => {
   const [timerInput, setTimerInput] = useState('')
   const [isHeightModalOpen, setIsHeightModalOpen] = useState(false)
   const [isTimerModalOpen, setIsTimerModalOpen] = useState(false)
+
+  // Control panel functions
+  const handleMotorCommand = async (motorState: 'ON' | 'OFF') => {
+    if (!device || !id) return
+
+    try {
+      setIsSendingCommand(true)
+      setCommandError(null)
+
+      const updatedDevice = await api.sendDeviceCommand(id, { motor: motorState })
+      setDevice(updatedDevice)
+      updateDevice(updatedDevice)
+      await refetch()
+    } catch (err: any) {
+      setCommandError(
+        err.response?.data?.message || t('device.commandError')
+      )
+    } finally {
+      setIsSendingCommand(false)
+    }
+  }
+
+  // Voice command
+  const handleVoiceCommand = async (command: 'ON' | 'OFF') => {
+    await handleMotorCommand(command)
+  }
+
+  const {
+    isListening,
+    transcript,
+    error: voiceError,
+    startListening,
+    stopListening,
+    clearTranscript,
+  } = useVoiceCommand(handleVoiceCommand)
 
   useEffect(() => {
     const fetchDevice = async () => {
@@ -144,27 +182,6 @@ export const DeviceDetail: React.FC = () => {
       )
     } finally {
       setIsAssigning(false)
-    }
-  }
-
-  // Control panel functions
-  const handleMotorCommand = async (motorState: 'ON' | 'OFF') => {
-    if (!device || !id) return
-
-    try {
-      setIsSendingCommand(true)
-      setCommandError(null)
-
-      const updatedDevice = await api.sendDeviceCommand(id, { motor: motorState })
-      setDevice(updatedDevice)
-      updateDevice(updatedDevice)
-      await refetch()
-    } catch (err: any) {
-      setCommandError(
-        err.response?.data?.message || t('device.commandError')
-      )
-    } finally {
-      setIsSendingCommand(false)
     }
   }
 
@@ -323,7 +340,7 @@ export const DeviceDetail: React.FC = () => {
   if (error || !device) {
     return (
       <div className="min-h-screen p-4">
-        <Card>
+        <Card className="premium-card">
           <CardBody>
             <p className="text-danger">{error || 'Device not found'}</p>
             <Button
@@ -377,7 +394,7 @@ export const DeviceDetail: React.FC = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <Card>
+          <Card className="premium-card">
             <CardHeader className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">{t('device.details')}</h2>
               <Button
@@ -486,7 +503,7 @@ export const DeviceDetail: React.FC = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <Card>
+          <Card className="premium-card">
             <CardHeader>
               <div className="flex items-center gap-2">
                 <Settings className="w-5 h-5" />
@@ -502,13 +519,46 @@ export const DeviceDetail: React.FC = () => {
 
               {/* Motor Control */}
               <div>
-                <p className="text-sm font-medium mb-2">{t('device.motor')}</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium">{t('device.motor')}</p>
+                  <Button
+                    isIconOnly
+                    size="sm"
+                    variant={isListening ? 'solid' : 'flat'}
+                    color={isListening ? 'danger' : 'default'}
+                    onPress={isListening ? stopListening : startListening}
+                    aria-label={isListening ? 'Stop voice command' : 'Start voice command'}
+                  >
+                    {isListening ? (
+                      <MicOff className="w-4 h-4" />
+                    ) : (
+                      <Mic className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
+                {isListening && (
+                  <div className="mb-2 p-2 rounded-lg bg-primary/10 border border-primary/20">
+                    <p className="text-xs text-primary font-medium mb-1">
+                      {t('device.listening')}...
+                    </p>
+                    {transcript && (
+                      <p className="text-xs text-gray-600 dark:text-gray-400">
+                        {transcript}
+                      </p>
+                    )}
+                  </div>
+                )}
+                {voiceError && (
+                  <div className="mb-2 p-2 rounded-lg bg-danger-50 dark:bg-danger-900/20 border border-danger-200 dark:border-danger-800">
+                    <p className="text-xs text-danger">{voiceError}</p>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <Button
                     color={device.motorState === 'ON' ? 'success' : 'default'}
                     variant={device.motorState === 'ON' ? 'solid' : 'flat'}
                     onPress={() => handleMotorCommand('ON')}
-                    isDisabled={isSendingCommand}
+                    isDisabled={isSendingCommand || isListening}
                     startContent={<Power className="w-4 h-4" />}
                     className="flex-1"
                   >
@@ -518,7 +568,7 @@ export const DeviceDetail: React.FC = () => {
                     color={device.motorState === 'OFF' ? 'danger' : 'default'}
                     variant={device.motorState === 'OFF' ? 'solid' : 'flat'}
                     onPress={() => handleMotorCommand('OFF')}
-                    isDisabled={isSendingCommand}
+                    isDisabled={isSendingCommand || isListening}
                     startContent={<Power className="w-4 h-4" />}
                     className="flex-1"
                   >

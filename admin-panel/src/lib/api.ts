@@ -8,7 +8,8 @@ import type {
   UpdateUserDto,
   CreateDeviceDto,
   UpdateDeviceDto,
-  AssignUsersDto
+  AssignUsersDto,
+  Contact
 } from '@/types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
@@ -139,6 +140,31 @@ class ApiClient {
     // Fetch all users and filter by device userIds
     const allUsers = await this.getUsers()
     return allUsers.filter(user => device.userIds.includes(user._id))
+  }
+
+  // Contacts
+  async getContacts(): Promise<{ contacts: Contact[]; total: number; unread: number }> {
+    const { data } = await this.client.get<{ contacts: Contact[]; total: number; unread: number }>('/contacts')
+    return data
+  }
+
+  async getContact(id: string): Promise<Contact> {
+    const { data } = await this.client.get<Contact>(`/contacts/${id}`)
+    return data
+  }
+
+  async markContactAsRead(id: string): Promise<Contact> {
+    const { data } = await this.client.patch<{ message: string; contact: Contact }>(`/contacts/${id}/read`)
+    return data.contact
+  }
+
+  async markContactAsUnread(id: string): Promise<Contact> {
+    const { data } = await this.client.patch<{ message: string; contact: Contact }>(`/contacts/${id}/unread`)
+    return data.contact
+  }
+
+  async deleteContact(id: string): Promise<void> {
+    await this.client.delete(`/contacts/${id}`)
   }
 }
 

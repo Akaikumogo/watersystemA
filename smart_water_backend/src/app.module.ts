@@ -7,6 +7,7 @@ import { DevicesModule } from './modules/devices/devices.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { MqttModule } from './modules/mqtt/mqtt.module';
 import { UsersModule } from './modules/users/users.module';
+import { ContactsModule } from './modules/contacts/contacts.module';
 
 @Module({
   imports: [
@@ -24,7 +25,8 @@ import { UsersModule } from './modules/users/users.module';
     DevicesModule,
     ReportsModule,
     MqttModule,
-    UsersModule
+    UsersModule,
+    ContactsModule
   ]
 })
 export class AppModule {}

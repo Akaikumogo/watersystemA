@@ -45,7 +45,7 @@ export class UsersService {
 			password: hashed,
 			role: dto.role ?? 'USER'
 		});
-		const userObj = user.toObject();
+		const userObj = user.toObject() as any;
 		delete userObj.password;
 		return { message: 'User created successfully', user: userObj };
 	}

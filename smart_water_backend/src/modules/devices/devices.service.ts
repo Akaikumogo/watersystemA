@@ -15,6 +15,7 @@ import { UpdateDeviceDto } from './dto/update-device.dto';
 import { DeviceCommandDto } from './dto/device-command.dto';
 import { MqttService } from '../mqtt/mqtt.service';
 import { DevicesGateway } from './devices.gateway';
+import { ReportsService } from '../reports/reports.service';
 
 type SensorSnapshot = {
   deviceName?: string;
@@ -36,11 +37,30 @@ export class DevicesService {
     @Inject(forwardRef(() => MqttService))
     private readonly mqttService?: MqttService,
     @Inject(forwardRef(() => DevicesGateway))
-    private readonly devicesGateway?: DevicesGateway
+    private readonly devicesGateway?: DevicesGateway,
+    @Inject(forwardRef(() => ReportsService))
+    private readonly reportsService?: ReportsService
   ) {}
 
   async findAll() {
     return this.deviceModel.find().lean();
+  }
+
+  async getPublicStats() {
+    const devices = await this.deviceModel.find().lean();
+    const total = devices.length;
+    const online = devices.filter((d) => d.status === 'ONLINE').length;
+    const offline = devices.filter((d) => d.status === 'OFFLINE').length;
+    const totalWater = devices.reduce((sum, d) => sum + (d.totalLitres || 0), 0);
+    const totalEnergy = devices.reduce((sum, d) => sum + (d.totalElectricity || 0), 0);
+    
+    return {
+      total,
+      online,
+      offline,
+      totalWater: Math.round(totalWater),
+      totalEnergy: Math.round(totalEnergy * 100) / 100,
+    };
   }
 
   async findOne(id: string) {
@@ -111,7 +131,7 @@ export class DevicesService {
 
     // Emit real-time update via WebSocket
     if (device && this.devicesGateway) {
-      this.devicesGateway.emitDeviceUpdate(device as Device);
+      this.devicesGateway.emitDeviceUpdate(device as unknown as Device);
       this.devicesGateway.emitDeviceStatus(
         (device as any)._id.toString(),
         'ONLINE'
@@ -137,7 +157,7 @@ export class DevicesService {
       const deviceId = (device as any)._id?.toString();
       if (deviceId) {
         this.devicesGateway.emitDeviceStatus(deviceId, deviceStatus);
-        this.devicesGateway.emitDeviceUpdate(device as Device);
+        this.devicesGateway.emitDeviceUpdate(device as unknown as Device);
       }
     }
   }
@@ -235,7 +255,7 @@ export class DevicesService {
     // Send command to ESP32 via MQTT with device ID in topic
     try {
       if (this.mqttService && updatedDevice) {
-        const deviceId = (updatedDevice as any)._id?.toString() || deviceId;
+        const updatedDeviceId = (updatedDevice as any)._id?.toString() || deviceId;
         const deviceName = (updatedDevice as any).name || 'ESP32Controller';
 
         // Use device name as identifier (ESP32 can be configured with this)
@@ -265,7 +285,7 @@ export class DevicesService {
 
     // Emit real-time update via WebSocket
     if (this.devicesGateway) {
-      this.devicesGateway.emitDeviceUpdate(updatedDevice as Device);
+      this.devicesGateway.emitDeviceUpdate(updatedDevice as unknown as Device);
     }
 
     return { message: 'Command sent successfully', device: updatedDevice };
@@ -308,6 +328,39 @@ export class DevicesService {
     }
   }
 
+  // Cron job: Save hourly energy consumption data
+  @Cron('0 * * * *') // Every hour at minute 0
+  async saveHourlyEnergyConsumption() {
+    try {
+      const devices = await this.deviceModel.find({ status: 'ONLINE' }).lean();
+      
+      for (const device of devices) {
+        const deviceId = (device as any)._id.toString();
+        const userIds = device.userIds || [];
+        
+        // Save consumption data for each user assigned to this device
+        for (const userId of userIds) {
+          if (this.reportsService) {
+            await this.reportsService.saveHourlyConsumption(
+              deviceId,
+              userId,
+              {
+                energyUsed: device.totalElectricity ?? 0,
+                waterUsed: device.totalLitres ?? 0,
+                motorState: device.motorState ?? 'OFF',
+                timerActive: device.timerActive ?? false
+              }
+            );
+          }
+        }
+      }
+      
+      this.logger.log(`Saved hourly energy consumption data for ${devices.length} devices`);
+    } catch (error) {
+      this.logger.error('Failed to save hourly energy consumption', error);
+    }
+  }
+
   // Cron job: Check timer every second
   @Cron(CronExpression.EVERY_SECOND)
   async checkTimers() {
@@ -340,7 +393,8 @@ export class DevicesService {
 
         // Send motor OFF command via MQTT
         if (this.mqttService) {
-          this.mqttService.publishMotor('OFF');
+          const deviceName = (device as any).name || 'ESP32Controller';
+          this.mqttService.publishMotor(deviceName, 'OFF');
           this.logger.log(
             `Timer expired for device ${device._id}, motor turned OFF`
           );
@@ -348,7 +402,7 @@ export class DevicesService {
 
         // Emit real-time update via WebSocket
         if (updatedDevice && this.devicesGateway) {
-          this.devicesGateway.emitDeviceUpdate(updatedDevice as Device);
+          this.devicesGateway.emitDeviceUpdate(updatedDevice as unknown as Device);
         }
       } catch (error) {
         this.logger.error(

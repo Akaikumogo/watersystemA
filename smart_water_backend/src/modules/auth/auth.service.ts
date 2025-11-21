@@ -92,7 +92,7 @@ export class AuthService {
       role: user.role
     };
 
-    const userObj = user.toObject();
+    const userObj = user.toObject() as any;
     delete userObj.password;
 
     return {

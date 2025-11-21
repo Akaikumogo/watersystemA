@@ -61,5 +61,16 @@ export interface AssignUsersDto {
   userIds: string[]
 }
 
+export interface Contact {
+  _id: string
+  name: string
+  email: string
+  message: string
+  read: boolean
+  readAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
 export type ViewMode = 'table' | 'grid'
 

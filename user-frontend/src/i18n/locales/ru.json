@@ -75,7 +75,34 @@
     "electricityConsumption": "Расход электроэнергии",
     "realTime": "В реальном времени",
     "connected": "Подключено",
-    "disconnected": "Отключено"
+    "disconnected": "Отключено",
+    "listening": "Прослушивание..."
+  },
+  "settings": {
+    "title": "Настройки",
+    "primaryColor": "Основной цвет",
+    "primaryColorDescription": "Выберите основной цвет приложения",
+    "selectColor": "Выберите цвет",
+    "language": "Язык",
+    "languageDescription": "Выберите язык приложения",
+    "selectLanguage": "Выберите язык"
+  },
+  "reports": {
+    "title": "Отчеты",
+    "daily": "Ежедневный",
+    "weekly": "Еженедельный",
+    "monthly": "Ежемесячный",
+    "selectDate": "Выберите дату",
+    "selectWeekStart": "Выберите начало недели",
+    "selectMonth": "Выберите месяц",
+    "load": "Загрузить",
+    "loadError": "Не удалось загрузить отчет",
+    "energy": "Энергия",
+    "water": "Вода",
+    "totalEnergy": "Всего энергии",
+    "totalWater": "Всего воды",
+    "weekPeriod": "Период недели",
+    "noData": "Данные недоступны"
   }
 }
 

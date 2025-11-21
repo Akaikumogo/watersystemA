@@ -22,7 +22,8 @@ export const useDevices = () => {
 
   useEffect(() => {
     fetchDevices()
-  }, [fetchDevices])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const createDevice = useCallback(async (dto: CreateDeviceDto) => {
     try {

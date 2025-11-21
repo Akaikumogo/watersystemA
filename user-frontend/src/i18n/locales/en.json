@@ -75,7 +75,34 @@
     "electricityConsumption": "Electricity Consumption",
     "realTime": "Real-time",
     "connected": "Connected",
-    "disconnected": "Disconnected"
+    "disconnected": "Disconnected",
+    "listening": "Listening..."
+  },
+  "settings": {
+    "title": "Settings",
+    "primaryColor": "Primary Color",
+    "primaryColorDescription": "Choose the primary color for the app",
+    "selectColor": "Select Color",
+    "language": "Language",
+    "languageDescription": "Choose the app language",
+    "selectLanguage": "Select Language"
+  },
+  "reports": {
+    "title": "Reports",
+    "daily": "Daily",
+    "weekly": "Weekly",
+    "monthly": "Monthly",
+    "selectDate": "Select Date",
+    "selectWeekStart": "Select Week Start",
+    "selectMonth": "Select Month",
+    "load": "Load",
+    "loadError": "Failed to load report",
+    "energy": "Energy",
+    "water": "Water",
+    "totalEnergy": "Total Energy",
+    "totalWater": "Total Water",
+    "weekPeriod": "Week Period",
+    "noData": "No data available"
   }
 }
 

@@ -12,6 +12,7 @@ import { Users } from '@/pages/Users'
 import { Devices } from '@/pages/Devices'
 import { UserDetail } from '@/pages/UserDetail'
 import { DeviceDetail } from '@/pages/DeviceDetail'
+import { Contacts } from '@/pages/Contacts'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Header } from '@/components/layout/Header'
 
@@ -20,6 +21,7 @@ const UsersPage = withPageTransition(Users)
 const DevicesPage = withPageTransition(Devices)
 const UserDetailPage = withPageTransition(UserDetail)
 const DeviceDetailPage = withPageTransition(DeviceDetail)
+const ContactsPage = withPageTransition(Contacts)
 
 const DashboardLayout = withAuth(() => {
   const location = useLocation()
@@ -37,6 +39,7 @@ const DashboardLayout = withAuth(() => {
               <Route path="/dashboard/users/:id" element={<UserDetailPage />} />
               <Route path="/dashboard/devices" element={<DevicesPage />} />
               <Route path="/dashboard/devices/:id" element={<DeviceDetailPage />} />
+              <Route path="/dashboard/contacts" element={<ContactsPage />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </AnimatePresence>
@@ -49,11 +52,17 @@ const DashboardLayout = withAuth(() => {
 function App() {
   const { i18n } = useTranslation()
   const { language } = useLanguageStore()
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, initialize } = useAuthStore()
 
   useEffect(() => {
     i18n.changeLanguage(language)
   }, [language, i18n])
+
+  // Initialize auth state from localStorage on mount
+  useEffect(() => {
+    initialize()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <BrowserRouter>
