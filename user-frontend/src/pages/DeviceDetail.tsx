@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -39,9 +39,11 @@ import {
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useDeviceStore } from '@/store/deviceStore'
+import { useLanguageStore } from '@/store/languageStore'
 import { useDevices } from '@/hooks/useDevices'
 import { socketManager } from '@/lib/socket'
 import { useVoiceCommand } from '@/hooks/useVoiceCommand'
+import { pushNotificationService } from '@/lib/pushNotifications'
 import { motion } from 'framer-motion'
 import type { Device, User } from '@/types'
 
@@ -70,7 +72,7 @@ export const DeviceDetail: React.FC = () => {
   const [isTimerModalOpen, setIsTimerModalOpen] = useState(false)
 
   // Control panel functions
-  const handleMotorCommand = async (motorState: 'ON' | 'OFF') => {
+  const handleMotorCommand = useCallback(async (motorState: 'ON' | 'OFF') => {
     if (!device || !id) return
 
     try {
@@ -81,6 +83,14 @@ export const DeviceDetail: React.FC = () => {
       setDevice(updatedDevice)
       updateDevice(updatedDevice)
       await refetch()
+      
+      // Send notification
+      await pushNotificationService.sendLocalNotification(
+        t('device.motor'),
+        motorState === 'ON' 
+          ? `${device.name} - ${t('device.motorOn')}`
+          : `${device.name} - ${t('device.motorOff')}`
+      )
     } catch (err: any) {
       setCommandError(
         err.response?.data?.message || t('device.commandError')
@@ -88,12 +98,24 @@ export const DeviceDetail: React.FC = () => {
     } finally {
       setIsSendingCommand(false)
     }
-  }
+  }, [device, id, updateDevice, refetch, t])
 
-  // Voice command
-  const handleVoiceCommand = async (command: 'ON' | 'OFF') => {
-    await handleMotorCommand(command)
-  }
+  const { language } = useLanguageStore()
+
+  // Voice command with motor selection
+  const handleVoiceCommand = useCallback(async (command: { action: 'ON' | 'OFF'; motor?: 'motor1' | 'motor2' | 'motor' }) => {
+    if (!device || !id) return
+    
+    // If motor is specified, switch to that motor first
+    if (command.motor === 'motor1' && device?.activeMotor2) {
+      await handleSwitchMotor()
+    } else if (command.motor === 'motor2' && !device?.activeMotor2) {
+      await handleSwitchMotor()
+    }
+    
+    // Execute the command
+    await handleMotorCommand(command.action)
+  }, [device, id, handleSwitchMotor, handleMotorCommand])
 
   const {
     isListening,
@@ -102,7 +124,7 @@ export const DeviceDetail: React.FC = () => {
     startListening,
     stopListening,
     clearTranscript,
-  } = useVoiceCommand(handleVoiceCommand)
+  } = useVoiceCommand(handleVoiceCommand, language)
 
   useEffect(() => {
     const fetchDevice = async () => {
@@ -243,7 +265,7 @@ export const DeviceDetail: React.FC = () => {
     }
   }
 
-  const handleSwitchMotor = async () => {
+  const handleSwitchMotor = useCallback(async () => {
     if (!device || !id) return
 
     try {
@@ -262,7 +284,7 @@ export const DeviceDetail: React.FC = () => {
     } finally {
       setIsSendingCommand(false)
     }
-  }
+  }, [device, id, updateDevice, refetch, t])
 
   // Real-time updates via WebSocket
   useEffect(() => {
@@ -277,19 +299,39 @@ export const DeviceDetail: React.FC = () => {
           socket.emit('subscribe:device', id)
 
           // Listen for device updates
-          const handleUpdate = (updatedDevice: Device) => {
+          const handleUpdate = async (updatedDevice: Device) => {
             if (updatedDevice._id === device._id) {
+              const prevState = device.motorState
               setDevice(updatedDevice)
               updateDevice(updatedDevice)
+              
+              // Send notification if motor state changed
+              if (prevState !== updatedDevice.motorState) {
+                await pushNotificationService.sendLocalNotification(
+                  t('device.motor'),
+                  `${device.name}: ${updatedDevice.motorState === 'ON' ? t('device.motorOn') : t('device.motorOff')}`,
+                  { deviceId: device._id, motorState: updatedDevice.motorState }
+                )
+              }
             }
           }
 
           // Listen for device status changes
-          const handleStatus = (data: { deviceId: string; status: 'ONLINE' | 'OFFLINE' }) => {
+          const handleStatus = async (data: { deviceId: string; status: 'ONLINE' | 'OFFLINE' }) => {
             if (data.deviceId === device._id) {
+              const prevStatus = device.status
               setDevice((prev) => prev ? { ...prev, status: data.status } : null)
               if (device) {
                 updateDevice({ ...device, status: data.status })
+              }
+              
+              // Send notification if status changed
+              if (prevStatus !== data.status) {
+                await pushNotificationService.sendLocalNotification(
+                  t('device.status'),
+                  `${device.name}: ${data.status === 'ONLINE' ? t('dashboard.online') : t('dashboard.offline')}`,
+                  { deviceId: device._id, status: data.status }
+                )
               }
             }
           }
@@ -327,7 +369,7 @@ export const DeviceDetail: React.FC = () => {
         if (cleanupFn) cleanupFn()
       })
     }
-  }, [id, device, updateDevice])
+  }, [id, device, updateDevice, t])
 
   if (loading) {
     return (
@@ -525,9 +567,9 @@ export const DeviceDetail: React.FC = () => {
                     isIconOnly
                     size="sm"
                     variant={isListening ? 'solid' : 'flat'}
-                    color={isListening ? 'danger' : 'default'}
+                    color={isListening ? 'danger' : 'primary'}
                     onPress={isListening ? stopListening : startListening}
-                    aria-label={isListening ? 'Stop voice command' : 'Start voice command'}
+                    aria-label={isListening ? t('device.stopVoice') : t('device.startVoice')}
                   >
                     {isListening ? (
                       <MicOff className="w-4 h-4" />
@@ -536,23 +578,45 @@ export const DeviceDetail: React.FC = () => {
                     )}
                   </Button>
                 </div>
+                
+                {/* Voice Command Instructions */}
+                {!isListening && (
+                  <div className="mb-3 p-3 rounded-lg bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800">
+                    <p className="text-xs font-medium text-primary mb-2">
+                      {t('device.voiceInstructions')}:
+                    </p>
+                    <ul className="text-xs text-gray-700 dark:text-gray-300 space-y-1 list-disc list-inside">
+                      <li>{t('device.voiceOn')}</li>
+                      <li>{t('device.voiceOff')}</li>
+                      <li>{t('device.voiceMotor1')}</li>
+                      <li>{t('device.voiceMotor2')}</li>
+                    </ul>
+                  </div>
+                )}
+
                 {isListening && (
-                  <div className="mb-2 p-2 rounded-lg bg-primary/10 border border-primary/20">
-                    <p className="text-xs text-primary font-medium mb-1">
+                  <div className="mb-2 p-3 rounded-lg bg-primary/10 border border-primary/20 animate-pulse">
+                    <p className="text-xs text-primary font-medium mb-1 flex items-center gap-2">
+                      <Mic className="w-3 h-3 animate-pulse" />
                       {t('device.listening')}...
                     </p>
                     {transcript && (
-                      <p className="text-xs text-gray-600 dark:text-gray-400">
-                        {transcript}
+                      <p className="text-xs text-gray-700 dark:text-gray-300 mt-1">
+                        "{transcript}"
                       </p>
                     )}
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {t('device.speakNow')}
+                    </p>
                   </div>
                 )}
+                
                 {voiceError && (
                   <div className="mb-2 p-2 rounded-lg bg-danger-50 dark:bg-danger-900/20 border border-danger-200 dark:border-danger-800">
                     <p className="text-xs text-danger">{voiceError}</p>
                   </div>
                 )}
+                
                 <div className="flex gap-2">
                   <Button
                     color={device.motorState === 'ON' ? 'success' : 'default'}

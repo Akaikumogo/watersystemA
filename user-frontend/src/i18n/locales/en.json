@@ -76,7 +76,15 @@
     "realTime": "Real-time",
     "connected": "Connected",
     "disconnected": "Disconnected",
-    "listening": "Listening..."
+    "listening": "Listening...",
+    "startVoice": "Start voice",
+    "stopVoice": "Stop voice",
+    "voiceInstructions": "Voice commands",
+    "voiceOn": "Turn on: \"Motor on\", \"Turn on\", \"Start\"",
+    "voiceOff": "Turn off: \"Motor off\", \"Turn off\", \"Stop\"",
+    "voiceMotor1": "Motor 1: \"Motor 1 on\", \"First motor on\"",
+    "voiceMotor2": "Motor 2: \"Motor 2 on\", \"Second motor on\"",
+    "speakNow": "Speak now..."
   },
   "settings": {
     "title": "Settings",

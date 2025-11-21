@@ -53,12 +53,7 @@ class PushNotificationService {
     });
   }
 
-  async sendLocalNotification(title: string, body: string): Promise<void> {
-    if (!Capacitor.isNativePlatform()) {
-      console.log('Local notification:', title, body);
-      return;
-    }
-
+  async sendLocalNotification(title: string, body: string, data?: any): Promise<void> {
     try {
       // Request permission for local notifications
       const permission = await LocalNotifications.requestPermissions();
@@ -72,14 +67,41 @@ class PushNotificationService {
               sound: 'default',
               attachments: undefined,
               actionTypeId: '',
-              extra: null
+              extra: data || null
             }
           ]
         });
+      } else if (!Capacitor.isNativePlatform()) {
+        // For web, use browser notification API
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(title, { body, icon: '/icon.png' });
+        } else if ('Notification' in window && Notification.permission !== 'denied') {
+          const permission = await Notification.requestPermission();
+          if (permission === 'granted') {
+            new Notification(title, { body, icon: '/icon.png' });
+          }
+        }
       }
     } catch (error) {
       console.error('Failed to send local notification:', error);
     }
+  }
+
+  async requestWebNotificationPermission(): Promise<boolean> {
+    if (!('Notification' in window)) {
+      return false;
+    }
+
+    if (Notification.permission === 'granted') {
+      return true;
+    }
+
+    if (Notification.permission !== 'denied') {
+      const permission = await Notification.requestPermission();
+      return permission === 'granted';
+    }
+
+    return false;
   }
 
   getToken(): string | null {

@@ -10,6 +10,7 @@ import { DeviceDetail } from './pages/DeviceDetail';
 import { Settings } from './pages/Settings';
 import { Reports } from './pages/Reports';
 import { socketManager } from './lib/socket';
+import { pushNotificationService } from './lib/pushNotifications';
 import { useThemeStore } from '@/store/themeStore';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -81,6 +82,8 @@ function App() {
     loadLanguage();
     // Load theme from storage
     loadTheme();
+    // Initialize push notifications
+    pushNotificationService.initialize();
   }, [loadLanguage, loadTheme]);
 
   useEffect(() => {

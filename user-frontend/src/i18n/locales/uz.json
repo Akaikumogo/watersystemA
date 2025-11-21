@@ -76,7 +76,16 @@
     "realTime": "Real vaqt",
     "connected": "Ulangan",
     "disconnected": "Ulanmagan",
-    "listening": "Ovozni tinglanmoqda"
+    "listening": "Ovozni tinglanmoqda",
+    "startVoice": "Ovozni boshlash",
+    "stopVoice": "Ovozni to'xtatish",
+    "voiceInstructions": "Ovoz buyruqlari",
+    "voiceOn": "Yoqish: \"Nasos yoq\", \"Motor yoq\", \"Yoqish\"",
+    "voiceOff": "O'chirish: \"Nasos o'chir\", \"Motor o'chir\", \"O'chirish\"",
+    "voiceMotor1": "Nasos 1: \"Birinchі nasos yoq\", \"Motor 1 yoq\"",
+    "voiceMotor2": "Nasos 2: \"Ikkinchі nasos yoq\", \"Motor 2 yoq\"",
+    "speakNow": "Endi gapiring...",
+    "status": "Holat"
   },
   "settings": {
     "title": "Sozlamalar",

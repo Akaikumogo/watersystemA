@@ -1,4 +1,9 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
+
+export interface VoiceCommand {
+  action: 'ON' | 'OFF'
+  motor?: 'motor1' | 'motor2' | 'motor'
+}
 
 interface VoiceCommandState {
   isListening: boolean
@@ -10,15 +15,21 @@ interface VoiceCommandState {
 }
 
 export const useVoiceCommand = (
-  onCommand: (command: 'ON' | 'OFF') => void
+  onCommand: (command: VoiceCommand) => void,
+  language: string = 'uz'
 ): VoiceCommandState => {
   const [isListening, setIsListening] = useState(false)
   const [transcript, setTranscript] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [recognition, setRecognition] = useState<SpeechRecognition | null>(null)
+  const [recognition, setRecognition] = useState<any>(null)
+  const onCommandRef = useRef(onCommand)
+
+  // Keep onCommand ref updated
+  useEffect(() => {
+    onCommandRef.current = onCommand
+  }, [onCommand])
 
   useEffect(() => {
-    // Check if browser supports Speech Recognition
     const SpeechRecognition =
       window.SpeechRecognition || (window as any).webkitSpeechRecognition
 
@@ -30,7 +41,14 @@ export const useVoiceCommand = (
     const recognitionInstance = new SpeechRecognition()
     recognitionInstance.continuous = false
     recognitionInstance.interimResults = false
-    recognitionInstance.lang = 'en-US' // Can be changed based on language
+    
+    // Set language based on current language
+    const langMap: Record<string, string> = {
+      'uz': 'uz-UZ',
+      'ru': 'ru-RU',
+      'en': 'en-US'
+    }
+    recognitionInstance.lang = langMap[language] || 'uz-UZ'
 
     recognitionInstance.onstart = () => {
       setIsListening(true)
@@ -38,19 +56,9 @@ export const useVoiceCommand = (
     }
 
     recognitionInstance.onresult = (event: SpeechRecognitionEvent) => {
-      const transcript = event.results[0][0].transcript.trim().toUpperCase()
+      const transcript = event.results[0][0].transcript.trim()
       setTranscript(transcript)
-
-      // Parse commands
-      if (transcript.includes('ON') || transcript.includes('START') || transcript.includes('OPEN')) {
-        onCommand('ON')
-      } else if (
-        transcript.includes('OFF') ||
-        transcript.includes('STOP') ||
-        transcript.includes('CLOSE')
-      ) {
-        onCommand('OFF')
-      }
+      parseCommand(transcript)
     }
 
     recognitionInstance.onerror = (event: SpeechRecognitionErrorEvent) => {
@@ -63,6 +71,39 @@ export const useVoiceCommand = (
       setIsListening(false)
     }
 
+    const parseCommand = (text: string) => {
+      const upperText = text.toUpperCase()
+      
+      // Motor selection
+      let motor: 'motor1' | 'motor2' | 'motor' | undefined = undefined
+      if (upperText.includes('MOTOR 1') || upperText.includes('BIRINCHI MOTOR') || upperText.includes('MOTOR BIR') || upperText.includes('NASOS 1') || upperText.includes('BIRINCHI NASOS')) {
+        motor = 'motor1'
+      } else if (upperText.includes('MOTOR 2') || upperText.includes('IKKINCHI MOTOR') || upperText.includes('MOTOR IKKI') || upperText.includes('NASOS 2') || upperText.includes('IKKINCHI NASOS')) {
+        motor = 'motor2'
+      } else if (upperText.includes('MOTOR') || upperText.includes('NASOS')) {
+        motor = 'motor'
+      }
+
+      // Action detection (Uzbek, Russian, English)
+      const onCommands = [
+        'ON', 'YOQ', 'YOQISH', 'OCH', 'OCHISH', 'START', 'BOSHLASH', 'ISHLAT',
+        'ВКЛЮЧИТЬ', 'ВКЛЮЧИ', 'ВКЛЮЧ', 'НАЧАТЬ', 'ОТКРЫТЬ'
+      ]
+      const offCommands = [
+        'OFF', 'OCHIR', 'OCHIRISH', 'YOP', 'YOPISH', 'STOP', 'TOXTAT', 'TOXTATISH',
+        'ВЫКЛЮЧИТЬ', 'ВЫКЛЮЧИ', 'ВЫКЛЮЧ', 'ОСТАНОВИТЬ', 'ЗАКРЫТЬ'
+      ]
+
+      const isOn = onCommands.some(cmd => upperText.includes(cmd))
+      const isOff = offCommands.some(cmd => upperText.includes(cmd))
+
+      if (isOn) {
+        onCommandRef.current({ action: 'ON', motor })
+      } else if (isOff) {
+        onCommandRef.current({ action: 'OFF', motor })
+      }
+    }
+
     setRecognition(recognitionInstance)
 
     return () => {
@@ -70,7 +111,8 @@ export const useVoiceCommand = (
         recognitionInstance.stop()
       }
     }
-  }, [onCommand])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language])
 
   const startListening = useCallback(() => {
     if (recognition && !isListening) {
@@ -151,4 +193,3 @@ interface SpeechRecognitionAlternative {
   transcript: string
   confidence: number
 }
-
