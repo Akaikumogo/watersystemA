@@ -1,4 +1,5 @@
-# Smart Water & Energy Monitoring System - Feature List
+
+npm run d# Smart Water & Energy Monitoring System - Feature List
 
 ## 📋 Loyiha Umumiy Ko'rinishi
 
