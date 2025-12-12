@@ -639,6 +639,9 @@ void loop() {
     timerActive = false;
     motorNew = false;
     motorState = "OFF";
+    // Publish status immediately when timer expires
+    publishData();
+    publishStatus("online");
   }
 
   delay(1000);

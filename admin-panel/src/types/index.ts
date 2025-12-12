@@ -1,76 +1,78 @@
 export interface User {
-  _id: string
-  username: string
-  role: 'ADMIN' | 'USER'
-  language?: 'uz' | 'en' | 'ru'
-  createdAt?: string
-  updatedAt?: string
+  _id: string;
+  username: string;
+  role: 'ADMIN' | 'USER';
+  language?: 'uz' | 'en' | 'ru';
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Device {
-  _id: string
-  name: string
-  location: string
-  status: 'ONLINE' | 'OFFLINE'
-  lastUpdated: string
-  powerUsage: number
-  waterDepth: number
-  height: number
-  totalLitres: number
-  totalElectricity: number
-  motorState: string
-  timerActive: boolean
-  userIds: string[]
-  createdAt?: string
-  updatedAt?: string
+  _id: string;
+  name: string;
+  location: string;
+  status: 'ONLINE' | 'OFFLINE';
+  lastUpdated: string;
+  powerUsage: number;
+  waterDepth: number;
+  height: number;
+  totalLitres: number;
+  totalElectricity: number;
+  motorState: string;
+  timerActive: boolean;
+  timerDuration?: number;
+  activeMotor2?: boolean;
+  motorFault?: boolean;
+  userIds: string[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface LoginCredentials {
-  username: string
-  password: string
+  username: string;
+  password: string;
 }
 
 export interface AuthResponse {
-  access_token: string
-  user: User
+  access_token: string;
+  user: User;
 }
 
 export interface CreateUserDto {
-  username: string
-  password: string
-  role: 'ADMIN' | 'USER'
+  username: string;
+  password: string;
+  role: 'ADMIN' | 'USER';
 }
 
 export interface UpdateUserDto {
-  username?: string
-  password?: string
-  role?: 'ADMIN' | 'USER'
+  username?: string;
+  password?: string;
+  role?: 'ADMIN' | 'USER';
 }
 
 export interface CreateDeviceDto {
-  name: string
-  location: string
+  name: string;
+  location: string;
 }
 
 export interface UpdateDeviceDto {
-  name?: string
-  location?: string
+  name?: string;
+  location?: string;
 }
 
 export interface AssignUsersDto {
-  userIds: string[]
+  userIds: string[];
 }
 
 export interface Contact {
-  _id: string
-  name: string
-  email: string
-  message: string
-  read: boolean
-  readAt?: string
-  createdAt: string
-  updatedAt: string
+  _id: string;
+  name: string;
+  email: string;
+  message: string;
+  read: boolean;
+  readAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export type ViewMode = 'table' | 'grid'
-
+export type ViewMode = 'table' | 'grid';

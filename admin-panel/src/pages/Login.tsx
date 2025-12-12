@@ -1,58 +1,55 @@
-import { useState, useEffect } from 'react'
-import { useForm } from 'react-hook-form'
-import { useTranslation } from 'react-i18next'
-import { motion } from 'framer-motion'
-import { useAuth } from '@/hooks/useAuth'
-import { useAuthStore } from '@/store/authStore'
-import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
-import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher'
-import { Droplet } from 'lucide-react'
+import { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { useAuth } from '@/hooks/useAuth';
+import { useAuthStore } from '@/store/authStore';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { LanguageSwitcher } from '@/components/ui/LanguageSwitcher';
+import { Droplet } from 'lucide-react';
 
 interface LoginFormData {
-  username: string
-  password: string
+  username: string;
+  password: string;
 }
 
 export const Login: React.FC = () => {
-  const { t } = useTranslation()
-  const { login } = useAuth()
-  const { isAuthenticated, initialize } = useAuthStore()
-  const [error, setError] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { login } = useAuth();
+  const { isAuthenticated, initialize } = useAuthStore();
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const {
     register,
     handleSubmit,
-    formState: { errors },
-  } = useForm<LoginFormData>()
+    formState: { errors }
+  } = useForm<LoginFormData>();
 
   // Check authentication and redirect if already logged in
   useEffect(() => {
-    initialize()
-    
-    // Check localStorage directly - this is the source of truth
-    const token = localStorage.getItem('token')
-    const user = localStorage.getItem('user')
-    
-    if (token && user) {
-      // Use navigate instead of window.location to avoid full page reload
-      window.location.href = '/dashboard'
+    initialize();
+
+    if (isAuthenticated) {
+      navigate('/dashboard', { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [isAuthenticated, navigate]);
 
   const onSubmit = async (data: LoginFormData) => {
-    setError(null)
-    setIsLoading(true)
-    
-    const result = await login(data)
-    
+    setError(null);
+    setIsLoading(true);
+
+    const result = await login(data);
+
     if (!result.success) {
-      setError(result.error || t('auth.loginError'))
-      setIsLoading(false)
+      setError(result.error || t('auth.loginError'));
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 p-4">
@@ -102,7 +99,7 @@ export const Login: React.FC = () => {
               placeholder={t('auth.usernamePlaceholder')}
               error={errors.username?.message}
               {...register('username', {
-                required: t('common.username') + ' ' + t('common.error'),
+                required: t('common.username') + ' ' + t('common.error')
               })}
               autoComplete="username"
               aria-required="true"
@@ -114,7 +111,7 @@ export const Login: React.FC = () => {
               placeholder={t('auth.passwordPlaceholder')}
               error={errors.password?.message}
               {...register('password', {
-                required: t('common.password') + ' ' + t('common.error'),
+                required: t('common.password') + ' ' + t('common.error')
               })}
               autoComplete="current-password"
               aria-required="true"
@@ -132,6 +129,5 @@ export const Login: React.FC = () => {
         </div>
       </motion.div>
     </div>
-  )
-}
-
+  );
+};

@@ -59,12 +59,16 @@ export type ColorKey = keyof typeof PREMIUM_COLORS
 
 interface ThemeState {
   primaryColor: ColorKey
+  isDark: boolean
   setPrimaryColor: (color: ColorKey) => Promise<void>
+  toggleTheme: () => Promise<void>
+  setTheme: (isDark: boolean) => Promise<void>
   loadTheme: () => Promise<void>
 }
 
-export const useThemeStore = create<ThemeState>((set) => ({
+export const useThemeStore = create<ThemeState>((set, get) => ({
   primaryColor: 'blue', // Default
+  isDark: false, // Default light mode
 
   setPrimaryColor: async (color: ColorKey) => {
     set({ primaryColor: color })
@@ -102,11 +106,47 @@ export const useThemeStore = create<ThemeState>((set) => ({
     document.head.appendChild(style)
   },
 
+  toggleTheme: async () => {
+    const currentTheme = get().isDark
+    const newTheme = !currentTheme
+    set({ isDark: newTheme })
+    await storage.set('isDark', newTheme)
+    
+    // Apply theme to document
+    if (newTheme) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  },
+
+  setTheme: async (isDark: boolean) => {
+    set({ isDark })
+    await storage.set('isDark', isDark)
+    
+    // Apply theme to document
+    if (isDark) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  },
+
   loadTheme: async () => {
     try {
       const savedColor = await storage.get<ColorKey>('primaryColor')
+      const savedIsDark = await storage.get<boolean>('isDark')
       const color = savedColor || 'blue'
-      set({ primaryColor: color })
+      const isDark = savedIsDark || false
+      
+      set({ primaryColor: color, isDark })
+      
+      // Apply dark mode to document
+      if (isDark) {
+        document.documentElement.classList.add('dark')
+      } else {
+        document.documentElement.classList.remove('dark')
+      }
       
       // Apply to document
       const root = document.documentElement

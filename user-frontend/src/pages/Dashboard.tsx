@@ -25,11 +25,8 @@ import {
   WifiOff,
   Zap,
   Waves,
-  LogOut,
   MapPin,
   Plus,
-  Settings,
-  FileText,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useDevices } from '@/hooks/useDevices'
@@ -43,7 +40,7 @@ import { socketManager } from '@/lib/socket'
 export const Dashboard: React.FC = () => {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { logout, user } = useAuth()
+  const { user } = useAuth()
   const { devices, loading, error, refetch } = useDevices()
   const { loadAuth } = useAuthStore()
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
@@ -104,9 +101,6 @@ export const Dashboard: React.FC = () => {
     }
   }, [devices])
 
-  const handleLogout = async () => {
-    await logout()
-  }
 
   const onSubmit = async (data: CreateDeviceFormData) => {
     try {
@@ -167,49 +161,8 @@ export const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-              {t('dashboard.title')}
-            </h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {user?.username}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              isIconOnly
-              variant="light"
-              onPress={() => navigate('/reports')}
-              aria-label={t('reports.title')}
-            >
-              <FileText className="w-5 h-5" />
-            </Button>
-            <Button
-              isIconOnly
-              variant="light"
-              onPress={() => navigate('/settings')}
-              aria-label={t('settings.title')}
-            >
-              <Settings className="w-5 h-5" />
-            </Button>
-            <Button
-              isIconOnly
-              variant="light"
-              onPress={handleLogout}
-              aria-label={t('common.logout')}
-            >
-              <LogOut className="w-5 h-5" />
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        {/* Stats Cards */}
+    <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+      {/* Stats Cards */}
         <div className="grid grid-cols-2 gap-4">
           <Card className="premium-card">
             <CardBody className="p-4">
@@ -256,9 +209,10 @@ export const Dashboard: React.FC = () => {
             </h2>
             <Button
               color="primary"
-              startContent={<Plus className="w-4 h-4" />}
+              startContent={<Plus className="w-4 h-4 text-white" />}
               onPress={() => setIsCreateModalOpen(true)}
               size="sm"
+              className="text-white bg-primary"
             >
               {t('device.createDevice')}
             </Button>
@@ -283,12 +237,13 @@ export const Dashboard: React.FC = () => {
             </Card>
           ) : (
             <div className="space-y-4">
-              {devices.map((device, index) => (
+              {devices.map((device) => (
                 <motion.div
                   key={device._id}
                   initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.3 }}
                 >
                   <Card
                     isPressable
@@ -354,7 +309,6 @@ export const Dashboard: React.FC = () => {
             </div>
           )}
         </div>
-      </div>
 
       {/* Create Device Modal */}
       <Modal
@@ -408,10 +362,10 @@ export const Dashboard: React.FC = () => {
                   setValue('status', value || 'OFFLINE')
                 }}
               >
-                <SelectItem key="ONLINE" value="ONLINE">
+                <SelectItem key="ONLINE">
                   {t('dashboard.online')}
                 </SelectItem>
-                <SelectItem key="OFFLINE" value="OFFLINE">
+                <SelectItem key="OFFLINE">
                   {t('dashboard.offline')}
                 </SelectItem>
               </Select>
@@ -444,6 +398,7 @@ export const Dashboard: React.FC = () => {
                 color="primary"
                 type="submit"
                 isLoading={isSubmitting}
+                className="text-white"
               >
                 {t('common.save')}
               </Button>

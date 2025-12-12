@@ -30,15 +30,15 @@ export const useVoiceCommand = (
   }, [onCommand])
 
   useEffect(() => {
-    const SpeechRecognition =
-      window.SpeechRecognition || (window as any).webkitSpeechRecognition
+    const SpeechRecognitionClass =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
 
-    if (!SpeechRecognition) {
+    if (!SpeechRecognitionClass) {
       setError('Voice recognition is not supported in your browser')
       return
     }
 
-    const recognitionInstance = new SpeechRecognition()
+    const recognitionInstance = new SpeechRecognitionClass()
     recognitionInstance.continuous = false
     recognitionInstance.interimResults = false
     
@@ -72,35 +72,69 @@ export const useVoiceCommand = (
     }
 
     const parseCommand = (text: string) => {
-      const upperText = text.toUpperCase()
+      const upperText = text.toUpperCase().trim()
       
-      // Motor selection
-      let motor: 'motor1' | 'motor2' | 'motor' | undefined = undefined
-      if (upperText.includes('MOTOR 1') || upperText.includes('BIRINCHI MOTOR') || upperText.includes('MOTOR BIR') || upperText.includes('NASOS 1') || upperText.includes('BIRINCHI NASOS')) {
-        motor = 'motor1'
-      } else if (upperText.includes('MOTOR 2') || upperText.includes('IKKINCHI MOTOR') || upperText.includes('MOTOR IKKI') || upperText.includes('NASOS 2') || upperText.includes('IKKINCHI NASOS')) {
-        motor = 'motor2'
-      } else if (upperText.includes('MOTOR') || upperText.includes('NASOS')) {
-        motor = 'motor'
-      }
-
-      // Action detection (Uzbek, Russian, English)
-      const onCommands = [
-        'ON', 'YOQ', 'YOQISH', 'OCH', 'OCHISH', 'START', 'BOSHLASH', 'ISHLAT',
-        'ВКЛЮЧИТЬ', 'ВКЛЮЧИ', 'ВКЛЮЧ', 'НАЧАТЬ', 'ОТКРЫТЬ'
+      // Faqat 2 ta buyruq: Motor ON va Motor OFF
+      // Barcha tillarda: "motor on", "motor off", "motor yoq", "motor o'chir", "насос включить", "насос выключить"
+      
+      // Motor ON buyruqlari (barcha tillarda - soddalashtirilgan)
+      const motorOnKeywords = [
+        'MOTOR ON',
+        'MOTOR YOQ',
+        'MOTOR OCH',
+        'NASOS YOQ',
+        'NASOS OCH',
+        'НАСОС ВКЛЮЧИТЬ',
+        'НАСОС ВКЛЮЧИ',
+        'МОТОР ВКЛЮЧИТЬ',
+        'МОТОР ВКЛЮЧИ',
+        'ON', // Qisqa variant
+        'YOQ', // Qisqa variant
+        'OCH', // Qisqa variant
       ]
-      const offCommands = [
-        'OFF', 'OCHIR', 'OCHIRISH', 'YOP', 'YOPISH', 'STOP', 'TOXTAT', 'TOXTATISH',
-        'ВЫКЛЮЧИТЬ', 'ВЫКЛЮЧИ', 'ВЫКЛЮЧ', 'ОСТАНОВИТЬ', 'ЗАКРЫТЬ'
+      
+      // Motor OFF buyruqlari (barcha tillarda - soddalashtirilgan)
+      const motorOffKeywords = [
+        'MOTOR OFF',
+        'MOTOR OCHIR',
+        'MOTOR YOP',
+        'MOTOR STOP',
+        'MOTOR TOXTAT',
+        'NASOS OCHIR',
+        'NASOS YOP',
+        'NASOS STOP',
+        'НАСОС ВЫКЛЮЧИТЬ',
+        'НАСОС ВЫКЛЮЧИ',
+        'МОТОР ВЫКЛЮЧИТЬ',
+        'МОТОР ВЫКЛЮЧИ',
+        'OFF', // Qisqa variant
+        'OCHIR', // Qisqa variant
+        'YOP', // Qisqa variant
+        'STOP', // Qisqa variant
+        'TOXTAT', // Qisqa variant
       ]
 
-      const isOn = onCommands.some(cmd => upperText.includes(cmd))
-      const isOff = offCommands.some(cmd => upperText.includes(cmd))
+      // Faqat to'liq so'zlar yoki asosiy kalit so'zlar bilan tekshirish
+      const isMotorOn = motorOnKeywords.some(keyword => {
+        // To'liq so'z yoki jumla boshi/oxiri
+        return upperText === keyword || 
+               upperText.startsWith(keyword + ' ') ||
+               upperText.endsWith(' ' + keyword) ||
+               upperText.includes(' ' + keyword + ' ')
+      })
+      
+      const isMotorOff = motorOffKeywords.some(keyword => {
+        // To'liq so'z yoki jumla boshi/oxiri
+        return upperText === keyword || 
+               upperText.startsWith(keyword + ' ') ||
+               upperText.endsWith(' ' + keyword) ||
+               upperText.includes(' ' + keyword + ' ')
+      })
 
-      if (isOn) {
-        onCommandRef.current({ action: 'ON', motor })
-      } else if (isOff) {
-        onCommandRef.current({ action: 'OFF', motor })
+      if (isMotorOn) {
+        onCommandRef.current({ action: 'ON' })
+      } else if (isMotorOff) {
+        onCommandRef.current({ action: 'OFF' })
       }
     }
 
@@ -149,23 +183,11 @@ export const useVoiceCommand = (
 // Type declarations for Speech Recognition API
 declare global {
   interface Window {
-    SpeechRecognition: typeof SpeechRecognition
-    webkitSpeechRecognition: typeof SpeechRecognition
+    SpeechRecognition: any
+    webkitSpeechRecognition: any
   }
 }
 
-interface SpeechRecognition extends EventTarget {
-  continuous: boolean
-  interimResults: boolean
-  lang: string
-  start: () => void
-  stop: () => void
-  abort: () => void
-  onstart: ((this: SpeechRecognition, ev: Event) => any) | null
-  onresult: ((this: SpeechRecognition, ev: SpeechRecognitionEvent) => any) | null
-  onerror: ((this: SpeechRecognition, ev: SpeechRecognitionErrorEvent) => any) | null
-  onend: ((this: SpeechRecognition, ev: Event) => any) | null
-}
 
 interface SpeechRecognitionEvent extends Event {
   results: SpeechRecognitionResultList

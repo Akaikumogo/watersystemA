@@ -8,7 +8,7 @@ import {
   Spinner,
   Tabs,
   Tab,
-  Input,
+  Input
 } from '@heroui/react';
 import { Zap, Droplet, Calendar } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -46,6 +46,13 @@ type MonthlyReport = {
   totalWater: number;
 };
 
+type YearlyReport = {
+  year: string;
+  devices: DeviceReport[];
+  totalEnergy: number;
+  totalWater: number;
+};
+
 export const Reports: React.FC = () => {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('daily');
@@ -69,10 +76,14 @@ export const Reports: React.FC = () => {
   });
 
   // Monthly report
-  const [monthlyReport, setMonthlyReport] = useState<MonthlyReport | null>(null);
-  const [month, setMonth] = useState(
-    new Date().toISOString().slice(0, 7)
+  const [monthlyReport, setMonthlyReport] = useState<MonthlyReport | null>(
+    null
   );
+  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+
+  // Yearly report
+  const [yearlyReport, setYearlyReport] = useState<YearlyReport | null>(null);
+  const [year, setYear] = useState(new Date().getFullYear().toString());
 
   const loadDailyReport = useCallback(async () => {
     try {
@@ -113,6 +124,22 @@ export const Reports: React.FC = () => {
     }
   }, [month, t]);
 
+  const loadYearlyReport = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await api.getYearlyReport(year);
+      setYearlyReport(data);
+    } catch (err: unknown) {
+      const errorMessage =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message || t('reports.loadError');
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }, [year, t]);
+
   useEffect(() => {
     if (activeTab === 'daily') {
       loadDailyReport();
@@ -120,8 +147,16 @@ export const Reports: React.FC = () => {
       loadWeeklyReport();
     } else if (activeTab === 'monthly') {
       loadMonthlyReport();
+    } else if (activeTab === 'yearly') {
+      loadYearlyReport();
     }
-  }, [activeTab, loadDailyReport, loadWeeklyReport, loadMonthlyReport]);
+  }, [
+    activeTab,
+    loadDailyReport,
+    loadWeeklyReport,
+    loadMonthlyReport,
+    loadYearlyReport
+  ]);
 
   const renderDeviceCard = (device: DeviceReport) => (
     <Card key={device.deviceId} className="premium-card">
@@ -167,16 +202,7 @@ export const Reports: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-            {t('reports.title')}
-          </h1>
-        </div>
-      </div>
-
+    <div>
       <div className="max-w-7xl mx-auto px-4 py-6">
         <Tabs
           selectedKey={activeTab}
@@ -195,6 +221,7 @@ export const Reports: React.FC = () => {
                 />
                 <Button
                   color="primary"
+                  className="text-white"
                   onPress={loadDailyReport}
                   isLoading={loading}
                 >
@@ -443,9 +470,95 @@ export const Reports: React.FC = () => {
               ) : null}
             </div>
           </Tab>
+
+          <Tab key="yearly" title={t('reports.yearly')}>
+            <div className="space-y-4">
+              <div className="flex gap-4 items-end">
+                <Input
+                  type="number"
+                  label={t('reports.selectYear')}
+                  value={year}
+                  onChange={(e) => setYear(e.target.value)}
+                  variant="bordered"
+                  min="2020"
+                  max="2099"
+                />
+                <Button
+                  color="primary"
+                  onPress={loadYearlyReport}
+                  isLoading={loading}
+                >
+                  {t('reports.load')}
+                </Button>
+              </div>
+
+              {error && (
+                <Card className="mb-4">
+                  <CardBody>
+                    <p className="text-danger text-sm">{error}</p>
+                  </CardBody>
+                </Card>
+              )}
+
+              {loading ? (
+                <div className="flex justify-center py-12">
+                  <Spinner size="lg" color="primary" />
+                </div>
+              ) : yearlyReport ? (
+                <>
+                  <Card className="premium-card mb-4">
+                    <CardBody>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-3 rounded-lg bg-warning/10">
+                            <Zap className="w-6 h-6 text-warning" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-600 dark:text-gray-400">
+                              {t('reports.totalEnergy')}
+                            </p>
+                            <p className="text-xl font-bold">
+                              {yearlyReport.totalEnergy.toFixed(2)} kWh
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="p-3 rounded-lg bg-primary/10">
+                            <Droplet className="w-6 h-6 text-primary" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-600 dark:text-gray-400">
+                              {t('reports.totalWater')}
+                            </p>
+                            <p className="text-xl font-bold">
+                              {yearlyReport.totalWater.toFixed(2)} L
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </CardBody>
+                  </Card>
+
+                  {yearlyReport.devices.length > 0 ? (
+                    <div className="space-y-4">
+                      {yearlyReport.devices.map(renderDeviceCard)}
+                    </div>
+                  ) : (
+                    <Card>
+                      <CardBody className="text-center py-12">
+                        <Calendar className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                        <p className="text-gray-600 dark:text-gray-400">
+                          {t('reports.noData')}
+                        </p>
+                      </CardBody>
+                    </Card>
+                  )}
+                </>
+              ) : null}
+            </div>
+          </Tab>
         </Tabs>
       </div>
     </div>
   );
 };
-

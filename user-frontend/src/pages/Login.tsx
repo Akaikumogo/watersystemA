@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { Button, Input, Card, CardBody, CardHeader } from '@heroui/react'
 import { Eye, EyeOff, Droplet } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
@@ -11,7 +11,6 @@ import { loginSchema, type LoginFormData } from '@/utils/validations'
 export const Login: React.FC = () => {
   const { t } = useTranslation()
   const { login } = useAuth()
-  const navigate = useNavigate()
   const [isVisible, setIsVisible] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)

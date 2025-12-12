@@ -1,68 +1,80 @@
-import { useState, useEffect, useCallback } from 'react'
-import { api } from '@/lib/api'
-import type { User, CreateUserDto, UpdateUserDto } from '@/types'
+import { useState, useEffect, useCallback } from 'react';
+import { api } from '@/lib/api';
+import type { User, CreateUserDto, UpdateUserDto } from '@/types';
 
 export const useUsers = () => {
-  const [users, setUsers] = useState<User[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchUsers = useCallback(async () => {
     try {
-      setLoading(true)
-      setError(null)
-      const data = await api.getUsers()
-      setUsers(data)
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to fetch users')
+      setLoading(true);
+      setError(null);
+      const data = await api.getUsers();
+      setUsers(data);
+    } catch (err: unknown) {
+      const errorMessage =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message || 'Failed to fetch users';
+      setError(errorMessage);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
-    fetchUsers()
+    fetchUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, []);
 
   const createUser = useCallback(async (dto: CreateUserDto) => {
     try {
-      const newUser = await api.createUser(dto)
-      setUsers((prev) => [...prev, newUser])
-      return { success: true }
-    } catch (err: any) {
+      const newUser = await api.createUser(dto);
+      setUsers((prev) => [...prev, newUser]);
+      return { success: true };
+    } catch (err: unknown) {
+      const errorMessage =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message || 'Failed to create user';
       return {
         success: false,
-        error: err.response?.data?.message || 'Failed to create user',
-      }
+        error: errorMessage
+      };
     }
-  }, [])
+  }, []);
 
   const updateUser = useCallback(async (id: string, dto: UpdateUserDto) => {
     try {
-      const updatedUser = await api.updateUser(id, dto)
-      setUsers((prev) => prev.map((u) => (u._id === id ? updatedUser : u)))
-      return { success: true }
-    } catch (err: any) {
+      const updatedUser = await api.updateUser(id, dto);
+      setUsers((prev) => prev.map((u) => (u._id === id ? updatedUser : u)));
+      return { success: true };
+    } catch (err: unknown) {
+      const errorMessage =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message || 'Failed to update user';
       return {
         success: false,
-        error: err.response?.data?.message || 'Failed to update user',
-      }
+        error: errorMessage
+      };
     }
-  }, [])
+  }, []);
 
   const deleteUser = useCallback(async (id: string) => {
     try {
-      await api.deleteUser(id)
-      setUsers((prev) => prev.filter((u) => u._id !== id))
-      return { success: true }
-    } catch (err: any) {
+      await api.deleteUser(id);
+      setUsers((prev) => prev.filter((u) => u._id !== id));
+      return { success: true };
+    } catch (err: unknown) {
+      const errorMessage =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message || 'Failed to delete user';
       return {
         success: false,
-        error: err.response?.data?.message || 'Failed to delete user',
-      }
+        error: errorMessage
+      };
     }
-  }, [])
+  }, []);
 
   return {
     users,
@@ -71,7 +83,6 @@ export const useUsers = () => {
     fetchUsers,
     createUser,
     updateUser,
-    deleteUser,
-  }
-}
-
+    deleteUser
+  };
+};

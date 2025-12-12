@@ -13,6 +13,11 @@
     "save": "Save",
     "cancel": "Cancel"
   },
+  "nav": {
+    "dashboard": "Dashboard",
+    "reports": "Reports",
+    "settings": "Settings"
+  },
   "auth": {
     "title": "Water System",
     "subtitle": "Sign in to your account",
@@ -79,11 +84,9 @@
     "listening": "Listening...",
     "startVoice": "Start voice",
     "stopVoice": "Stop voice",
-    "voiceInstructions": "Voice commands",
-    "voiceOn": "Turn on: \"Motor on\", \"Turn on\", \"Start\"",
-    "voiceOff": "Turn off: \"Motor off\", \"Turn off\", \"Stop\"",
-    "voiceMotor1": "Motor 1: \"Motor 1 on\", \"First motor on\"",
-    "voiceMotor2": "Motor 2: \"Motor 2 on\", \"Second motor on\"",
+    "voiceInstructions": "Voice commands (all languages)",
+    "voiceOn": "Turn on: \"Motor on\", \"Motor yoq\", \"Nasos yoq\"",
+    "voiceOff": "Turn off: \"Motor off\", \"Motor o'chir\", \"Nasos o'chir\"",
     "speakNow": "Speak now..."
   },
   "settings": {
@@ -100,9 +103,11 @@
     "daily": "Daily",
     "weekly": "Weekly",
     "monthly": "Monthly",
+    "yearly": "Yearly",
     "selectDate": "Select Date",
     "selectWeekStart": "Select Week Start",
     "selectMonth": "Select Month",
+    "selectYear": "Select Year",
     "load": "Load",
     "loadError": "Failed to load report",
     "energy": "Energy",
@@ -113,4 +118,3 @@
     "noData": "No data available"
   }
 }
-

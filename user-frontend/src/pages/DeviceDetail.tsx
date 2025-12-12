@@ -19,10 +19,7 @@ import {
   Input,
 } from '@heroui/react'
 import {
-  ArrowLeft,
   Droplet,
-  Wifi,
-  WifiOff,
   MapPin,
   Zap,
   Waves,
@@ -68,8 +65,8 @@ export const DeviceDetail: React.FC = () => {
   const [commandError, setCommandError] = useState<string | null>(null)
   const [heightInput, setHeightInput] = useState('')
   const [timerInput, setTimerInput] = useState('')
-  const [isHeightModalOpen, setIsHeightModalOpen] = useState(false)
-  const [isTimerModalOpen, setIsTimerModalOpen] = useState(false)
+  const [, setIsHeightModalOpen] = useState(false)
+  const [, setIsTimerModalOpen] = useState(false)
 
   // Control panel functions
   const handleMotorCommand = useCallback(async (motorState: 'ON' | 'OFF') => {
@@ -102,6 +99,28 @@ export const DeviceDetail: React.FC = () => {
 
   const { language } = useLanguageStore()
 
+  // Switch motor function - must be defined before handleVoiceCommand
+  const handleSwitchMotor = useCallback(async () => {
+    if (!device || !id) return
+
+    try {
+      setIsSendingCommand(true)
+      setCommandError(null)
+
+      const newMotorState = !device.activeMotor2
+      const updatedDevice = await api.sendDeviceCommand(id, { switchMotor: newMotorState })
+      setDevice(updatedDevice)
+      updateDevice(updatedDevice)
+      await refetch()
+    } catch (err: any) {
+      setCommandError(
+        err.response?.data?.message || t('device.commandError')
+      )
+    } finally {
+      setIsSendingCommand(false)
+    }
+  }, [device, id, updateDevice, refetch, t])
+
   // Voice command with motor selection
   const handleVoiceCommand = useCallback(async (command: { action: 'ON' | 'OFF'; motor?: 'motor1' | 'motor2' | 'motor' }) => {
     if (!device || !id) return
@@ -123,7 +142,6 @@ export const DeviceDetail: React.FC = () => {
     error: voiceError,
     startListening,
     stopListening,
-    clearTranscript,
   } = useVoiceCommand(handleVoiceCommand, language)
 
   useEffect(() => {
@@ -265,27 +283,6 @@ export const DeviceDetail: React.FC = () => {
     }
   }
 
-  const handleSwitchMotor = useCallback(async () => {
-    if (!device || !id) return
-
-    try {
-      setIsSendingCommand(true)
-      setCommandError(null)
-
-      const newMotorState = !device.activeMotor2
-      const updatedDevice = await api.sendDeviceCommand(id, { switchMotor: newMotorState })
-      setDevice(updatedDevice)
-      updateDevice(updatedDevice)
-      await refetch()
-    } catch (err: any) {
-      setCommandError(
-        err.response?.data?.message || t('device.commandError')
-      )
-    } finally {
-      setIsSendingCommand(false)
-    }
-  }, [device, id, updateDevice, refetch, t])
-
   // Real-time updates via WebSocket
   useEffect(() => {
     if (!id || !device) return
@@ -399,42 +396,12 @@ export const DeviceDetail: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center gap-4">
-          <Button
-            isIconOnly
-            variant="light"
-            onPress={() => navigate('/dashboard')}
-            aria-label={t('common.back')}
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white flex-1">
-            {device.name}
-          </h1>
-          <Chip
-            color={device.status === 'ONLINE' ? 'success' : 'danger'}
-            variant="flat"
-            size="sm"
-            startContent={
-              device.status === 'ONLINE' ? (
-                <Wifi className="w-3 h-3" />
-              ) : (
-                <WifiOff className="w-3 h-3" />
-              )
-            }
-          >
-            {device.status === 'ONLINE' ? t('dashboard.online') : t('dashboard.offline')}
-          </Chip>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-4">
+    <div className="max-w-7xl mx-auto px-4 py-6 space-y-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.3 }}
         >
           <Card className="premium-card">
             <CardHeader className="flex items-center justify-between">
@@ -542,8 +509,9 @@ export const DeviceDetail: React.FC = () => {
         {/* Control Panel */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.3, delay: 0.1 }}
         >
           <Card className="premium-card">
             <CardHeader>
@@ -588,8 +556,6 @@ export const DeviceDetail: React.FC = () => {
                     <ul className="text-xs text-gray-700 dark:text-gray-300 space-y-1 list-disc list-inside">
                       <li>{t('device.voiceOn')}</li>
                       <li>{t('device.voiceOff')}</li>
-                      <li>{t('device.voiceMotor1')}</li>
-                      <li>{t('device.voiceMotor2')}</li>
                     </ul>
                   </div>
                 )}
@@ -624,7 +590,7 @@ export const DeviceDetail: React.FC = () => {
                     onPress={() => handleMotorCommand('ON')}
                     isDisabled={isSendingCommand || isListening}
                     startContent={<Power className="w-4 h-4" />}
-                    className="flex-1"
+                    className={`flex-1 text-white ${device.motorState === 'ON' ? 'bg-green-600' : 'bg-gray-600'}`}
                   >
                     {t('device.motorOn')}
                   </Button>
@@ -634,7 +600,7 @@ export const DeviceDetail: React.FC = () => {
                     onPress={() => handleMotorCommand('OFF')}
                     isDisabled={isSendingCommand || isListening}
                     startContent={<Power className="w-4 h-4" />}
-                    className="flex-1"
+                    className={`flex-1 text-white ${device.motorState === 'OFF' ? 'bg-red-600' : 'bg-gray-600'}`}
                   >
                     {t('device.motorOff')}
                   </Button>
@@ -667,6 +633,7 @@ export const DeviceDetail: React.FC = () => {
                   />
                   <Button
                     color="primary"
+                    className="text-white bg-primary"
                     onPress={() => {
                       if (heightInput) {
                         handleSetHeight()
@@ -700,6 +667,7 @@ export const DeviceDetail: React.FC = () => {
                   />
                   <Button
                     color="primary"
+                    className="text-white bg-primary"
                     onPress={() => {
                       if (timerInput) {
                         handleSetTimer()
@@ -708,7 +676,7 @@ export const DeviceDetail: React.FC = () => {
                       }
                     }}
                     isDisabled={isSendingCommand}
-                    startContent={<Clock className="w-4 h-4" />}
+                    startContent={<Clock className="w-4 h-4 text-white" />}
                   >
                     {t('common.save')}
                   </Button>
@@ -728,11 +696,11 @@ export const DeviceDetail: React.FC = () => {
                   <p className="text-sm font-medium mb-2">{t('device.switchMotor')}</p>
                   <Button
                     color="secondary"
-                    variant="flat"
+                    variant="solid"
                     onPress={handleSwitchMotor}
                     isDisabled={isSendingCommand || device.motorFault}
-                    startContent={<RefreshCw className="w-4 h-4" />}
-                    className="w-full"
+                    startContent={<RefreshCw className="w-4 h-4 text-white" />}
+                    className="w-full text-white bg-secondary"
                   >
                     {device.activeMotor2 ? t('device.motor1') : t('device.motor2')}
                   </Button>
@@ -741,7 +709,6 @@ export const DeviceDetail: React.FC = () => {
             </CardBody>
           </Card>
         </motion.div>
-      </div>
 
       {/* Assign Users Modal */}
       <Modal
@@ -807,13 +774,14 @@ export const DeviceDetail: React.FC = () => {
             </Button>
             <Button
               color="primary"
+              className="text-white"
               onPress={handleAssignUsers}
               isLoading={isAssigning}
               isDisabled={isLoadingUsers || users.length === 0}
             >
               {t('common.save')}
             </Button>
-          </ModalFooter>
+            </ModalFooter>
         </ModalContent>
       </Modal>
     </div>

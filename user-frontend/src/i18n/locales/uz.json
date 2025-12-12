@@ -13,6 +13,11 @@
     "save": "Saqlash",
     "cancel": "Bekor qilish"
   },
+  "nav": {
+    "dashboard": "Boshqaruv",
+    "reports": "Hisobotlar",
+    "settings": "Sozlamalar"
+  },
   "auth": {
     "title": "Water System",
     "subtitle": "Hisobingizga kiring",
@@ -79,11 +84,9 @@
     "listening": "Ovozni tinglanmoqda",
     "startVoice": "Ovozni boshlash",
     "stopVoice": "Ovozni to'xtatish",
-    "voiceInstructions": "Ovoz buyruqlari",
-    "voiceOn": "Yoqish: \"Nasos yoq\", \"Motor yoq\", \"Yoqish\"",
-    "voiceOff": "O'chirish: \"Nasos o'chir\", \"Motor o'chir\", \"O'chirish\"",
-    "voiceMotor1": "Nasos 1: \"Birinchі nasos yoq\", \"Motor 1 yoq\"",
-    "voiceMotor2": "Nasos 2: \"Ikkinchі nasos yoq\", \"Motor 2 yoq\"",
+    "voiceInstructions": "Ovoz buyruqlari (barcha tillarda)",
+    "voiceOn": "Yoqish: \"Motor on\", \"Motor yoq\", \"Nasos yoq\"",
+    "voiceOff": "O'chirish: \"Motor off\", \"Motor o'chir\", \"Nasos o'chir\"",
     "speakNow": "Endi gapiring...",
     "status": "Holat"
   },
@@ -97,13 +100,17 @@
     "selectLanguage": "Tilni tanlang"
   },
   "reports": {
+    "yearly": "Yillik",
+    "selectYear": "Yilni tanlang",
     "title": "Hisobotlar",
     "daily": "Kunlik",
     "weekly": "Haftalik",
     "monthly": "Oylik",
+    "yearly": "Yillik",
     "selectDate": "Sanani tanlang",
     "selectWeekStart": "Hafta boshlanishini tanlang",
     "selectMonth": "Oyni tanlang",
+    "selectYear": "Yilni tanlang",
     "load": "Yuklash",
     "loadError": "Hisobotni yuklashda xatolik",
     "energy": "Elektr",
@@ -114,4 +121,3 @@
     "noData": "Ma'lumot topilmadi"
   }
 }
-

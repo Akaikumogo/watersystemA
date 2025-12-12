@@ -88,11 +88,13 @@ class ApiClient {
     return data;
   }
 
-  async register(credentials: RegisterCredentials): Promise<AuthResponse> {
-    const { data } = await this.client.post<AuthResponse>(
-      '/auth/register-client',
-      credentials
-    );
+  async register(
+    credentials: RegisterCredentials
+  ): Promise<{ message: string; userId: string }> {
+    const { data } = await this.client.post<{
+      message: string;
+      userId: string;
+    }>('/auth/register-client', credentials);
     return data;
   }
 
@@ -186,6 +188,12 @@ class ApiClient {
   async getMonthlyReport(month?: string) {
     const params = month ? { month } : {};
     const { data } = await this.client.get('/reports/monthly', { params });
+    return data;
+  }
+
+  async getYearlyReport(year?: string) {
+    const params = year ? { year } : {};
+    const { data } = await this.client.get('/reports/yearly', { params });
     return data;
   }
 }

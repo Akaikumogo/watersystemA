@@ -20,10 +20,15 @@ export const useAuth = () => {
         setAuth(response.user, response.access_token);
         navigate('/dashboard');
         return { success: true };
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const errorMessage =
+          (error as { response?: { data?: { message?: string } } })?.response
+            ?.data?.message ||
+          (error as { message?: string })?.message ||
+          'Login failed. Please check your credentials.';
         return {
           success: false,
-          error: error.response?.data?.message || 'Login failed'
+          error: errorMessage
         };
       }
     },

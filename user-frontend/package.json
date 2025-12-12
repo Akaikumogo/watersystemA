@@ -16,6 +16,7 @@
     "test:coverage": "vitest --coverage"
   },
   "dependencies": {
+    "@capacitor/android": "^7.4.4",
     "@capacitor/app": "^5.0.6",
     "@capacitor/core": "^5.5.1",
     "@capacitor/local-notifications": "^5.0.8",
