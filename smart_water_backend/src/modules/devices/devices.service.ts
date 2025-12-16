@@ -182,10 +182,10 @@ export class DevicesService {
     // Emit real-time update via WebSocket
     if (device && this.devicesGateway) {
       this.devicesGateway.emitDeviceUpdate(device as unknown as Device);
-      this.devicesGateway.emitDeviceStatus(
-        (device as any)._id.toString(),
-        'ONLINE'
-      );
+      this.devicesGateway.emitDeviceStatus({
+        deviceId: (device as any)._id.toString(),
+        status: 'ONLINE'
+      });
     }
   }
 
@@ -421,7 +421,10 @@ export class DevicesService {
         // Emit status change via WebSocket
         if (this.devicesGateway) {
           const deviceId = (device as any)._id.toString();
-          this.devicesGateway.emitDeviceStatus(deviceId, 'OFFLINE');
+          this.devicesGateway.emitDeviceStatus({
+            deviceId,
+            status: 'OFFLINE'
+          });
         }
       } catch (error) {
         this.logger.error(

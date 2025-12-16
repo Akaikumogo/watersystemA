@@ -80,7 +80,7 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
         this.handleSensorMessage(message);
       } else if (topic === 'device/status') {
         // Global status - deviceName payload ichida bo'lishi kerak yoki default
-        this.handleStatusMessage(message, null);
+        this.handleStatusMessage(message);
       }
       // Handle device-specific topics: device/{deviceName}/sensor/data
       else if (topic.startsWith('device/') && topic.endsWith('/sensor/data')) {
