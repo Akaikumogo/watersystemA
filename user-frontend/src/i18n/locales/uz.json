@@ -88,7 +88,11 @@
     "voiceOn": "Yoqish: \"Motor on\", \"Motor yoq\", \"Nasos yoq\"",
     "voiceOff": "O'chirish: \"Motor off\", \"Motor o'chir\", \"Nasos o'chir\"",
     "speakNow": "Endi gapiring...",
-    "status": "Holat"
+    "status": "Holat",
+    "ultrasonicMode": "Ultrasonik avtomatik rejim",
+    "ultrasonicAutoDesc": "Avtomatik: Nasos suv darajasiga qarab yoqiladi/o'chadi",
+    "ultrasonicManualDesc": "Qo'lda: Nasos faqat tugmalar va timer orqali boshqariladi",
+    "offlineWarning": "Qurilma oflayn. Barcha amallar o'chirilgan."
   },
   "settings": {
     "title": "Sozlamalar",

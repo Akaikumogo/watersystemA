@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsEnum, IsOptional, IsNumber, IsArray, IsMongoId, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsEnum, IsOptional, IsNumber, IsArray, IsMongoId, Min, IsBoolean, MinLength, MaxLength, Matches } from 'class-validator';
 import { DeviceStatus } from '../schemas/device.schema';
 
 export class CreateDeviceDto {
@@ -10,6 +10,11 @@ export class CreateDeviceDto {
 		maxLength: 100
 	})
 	@IsString()
+	@MinLength(1)
+	@MaxLength(50)
+	@Matches(/^[a-zA-Z0-9_-]+$/, { // QO'SHISH: Faqat alphanumeric, underscore, dash
+		message: 'Device name can only contain letters, numbers, underscores, and dashes'
+	})
 	@IsNotEmpty()
 	name!: string;
 

@@ -87,7 +87,11 @@
     "voiceInstructions": "Voice commands (all languages)",
     "voiceOn": "Turn on: \"Motor on\", \"Motor yoq\", \"Nasos yoq\"",
     "voiceOff": "Turn off: \"Motor off\", \"Motor o'chir\", \"Nasos o'chir\"",
-    "speakNow": "Speak now..."
+    "speakNow": "Speak now...",
+    "ultrasonicMode": "Ultrasonic Auto Mode",
+    "ultrasonicAutoDesc": "Auto: Motor turns on/off based on water level",
+    "ultrasonicManualDesc": "Manual: Motor control only via buttons and timer",
+    "offlineWarning": "Device is offline. All actions are disabled."
   },
   "settings": {
     "title": "Settings",

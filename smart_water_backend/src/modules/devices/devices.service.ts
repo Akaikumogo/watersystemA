@@ -26,6 +26,9 @@ type SensorSnapshot = {
   totalElectricity?: number;
   motorState?: string;
   timerActive?: boolean;
+  timerDuration?: number;
+  motorOnline?: boolean;
+  motorBy?: string; // Event type: BOOT, MANUAL_ON, TIMER_START, etc.
 };
 
 @Injectable()
@@ -51,21 +54,32 @@ export class DevicesService {
     const total = devices.length;
     const online = devices.filter((d) => d.status === 'ONLINE').length;
     const offline = devices.filter((d) => d.status === 'OFFLINE').length;
-    const totalWater = devices.reduce((sum, d) => sum + (d.totalLitres || 0), 0);
-    const totalEnergy = devices.reduce((sum, d) => sum + (d.totalElectricity || 0), 0);
-    
+    const totalWater = devices.reduce(
+      (sum, d) => sum + (d.totalLitres || 0),
+      0
+    );
+    const totalEnergy = devices.reduce(
+      (sum, d) => sum + (d.totalElectricity || 0),
+      0
+    );
+
     return {
       total,
       online,
       offline,
       totalWater: Math.round(totalWater),
-      totalEnergy: Math.round(totalEnergy * 100) / 100,
+      totalEnergy: Math.round(totalEnergy * 100) / 100
     };
   }
 
   async findOne(id: string) {
     const device = await this.deviceModel.findById(id).lean();
     if (!device) throw new NotFoundException('Device not found');
+    return device;
+  }
+
+  async getDeviceByName(name: string) {
+    const device = await this.deviceModel.findOne({ name }).lean();
     return device;
   }
 
@@ -106,7 +120,13 @@ export class DevicesService {
   }
 
   async upsertSensorSnapshot(snapshot: SensorSnapshot) {
-    const name = snapshot.deviceName ?? 'ESP32Controller';
+    // deviceName majburiy bo'lishi kerak
+    if (!snapshot.deviceName) {
+      this.logger.warn('Sensor snapshot missing deviceName, skipping');
+      return;
+    }
+
+    const name = snapshot.deviceName;
     const now = new Date();
     const update = {
       name,
@@ -118,7 +138,12 @@ export class DevicesService {
       totalLitres: snapshot.totalLitres ?? 0,
       totalElectricity: snapshot.totalElectricity ?? 0,
       motorState: snapshot.motorState ?? 'OFF',
-      timerActive: snapshot.timerActive ?? false
+      timerActive: snapshot.timerActive ?? false,
+      timerDuration:
+        snapshot.timerActive && snapshot.timerDuration
+          ? snapshot.timerDuration
+          : 0,
+      motorOnline: snapshot.motorOnline ?? false
     };
 
     const device = await this.deviceModel
@@ -128,6 +153,31 @@ export class DevicesService {
         { upsert: true, new: true, setDefaultsOnInsert: true }
       )
       .lean();
+
+    // Send device settings to ESP32 when it first connects (BOOT event)
+    // Check if this is a BOOT event by checking motorBy field
+    if (device && this.mqttService && snapshot.deviceName) {
+      const deviceName = (device as any).name;
+      const isBootEvent = snapshot.motorBy === 'BOOT';
+
+      // Send settings on BOOT event
+      if (isBootEvent) {
+        this.logger.log(
+          `BOOT event detected. Sending device settings to ESP32: ${deviceName}`
+        );
+        // Send current device settings to ESP32
+        this.mqttService.publishDeviceSettings(deviceName, {
+          height: (device as any).height ?? 0,
+          activeMotor2: (device as any).activeMotor2 ?? false,
+          ultrasonic: (device as any).ultrasonic ?? true
+        });
+        this.logger.log(
+          `Settings sent: height=${(device as any).height ?? 0}, activeMotor2=${
+            (device as any).activeMotor2 ?? false
+          }, ultrasonic=${(device as any).ultrasonic ?? true}`
+        );
+      }
+    }
 
     // Emit real-time update via WebSocket
     if (device && this.devicesGateway) {
@@ -139,27 +189,68 @@ export class DevicesService {
     }
   }
 
-  async updateStatus(status: string) {
-    const name = 'ESP32Controller';
-    const normalized = status?.toLowerCase();
+  async updateStatus(
+    data: {
+      status: string;
+      waterDepth?: number;
+      totalLitres?: number;
+      totalElectricity?: number;
+      ultrasonicMode?: boolean;
+      activeMotor2?: boolean;
+      height?: number;
+      motorState?: string;
+    },
+    deviceName?: string | null
+  ) {
+    // deviceName ni aniqlash
+    const name = deviceName || (data as any)?.deviceName || 'ESP32Controller';
+    const normalized = data.status?.toLowerCase();
     const deviceStatus: DeviceStatus =
       normalized === 'offline' ? 'OFFLINE' : 'ONLINE';
+
+    const updateFields: any = {
+      status: deviceStatus,
+      lastUpdated: new Date()
+    };
+
+    if (data.waterDepth !== undefined) updateFields.waterDepth = data.waterDepth;
+    if (data.totalLitres !== undefined) updateFields.totalLitres = data.totalLitres;
+    if (data.totalElectricity !== undefined)
+      updateFields.totalElectricity = data.totalElectricity;
+    if (data.ultrasonicMode !== undefined)
+      updateFields.ultrasonic = data.ultrasonicMode;
+    if (data.activeMotor2 !== undefined) updateFields.activeMotor2 = data.activeMotor2;
+    if (data.height !== undefined) updateFields.height = data.height;
+    if (data.motorState !== undefined) updateFields.motorState = data.motorState;
+
     const device = await this.deviceModel
       .findOneAndUpdate(
         { name },
-        { $set: { status: deviceStatus, lastUpdated: new Date() } },
+        { $set: updateFields },
         { upsert: true, setDefaultsOnInsert: true, new: true }
       )
       .lean();
 
-    // Emit status change via WebSocket
+    // Emit status change via WebSocket (with metrics)
     if (device && this.devicesGateway) {
       const deviceId = (device as any)._id?.toString();
       if (deviceId) {
-        this.devicesGateway.emitDeviceStatus(deviceId, deviceStatus);
+        this.devicesGateway.emitDeviceStatus({
+          deviceId,
+          status: deviceStatus,
+          waterDepth: data.waterDepth,
+          totalLitres: data.totalLitres,
+          totalElectricity: data.totalElectricity,
+          ultrasonicMode: data.ultrasonicMode,
+          activeMotor2: data.activeMotor2,
+          height: data.height,
+          motorState: data.motorState
+        });
         this.devicesGateway.emitDeviceUpdate(device as unknown as Device);
       }
     }
+
+    this.logger.debug(`Updated status for device: ${name} -> ${deviceStatus}`);
   }
 
   async assignUsers(
@@ -244,6 +335,11 @@ export class DevicesService {
       updateData.activeMotor2 = command.switchMotor;
     }
 
+    // Ultrasonic mode command
+    if (command.ultrasonic !== undefined) {
+      updateData.ultrasonic = command.ultrasonic;
+    }
+
     const updatedDevice = await this.deviceModel
       .findByIdAndUpdate(deviceId, { $set: updateData }, { new: true })
       .lean();
@@ -255,7 +351,8 @@ export class DevicesService {
     // Send command to ESP32 via MQTT with device ID in topic
     try {
       if (this.mqttService && updatedDevice) {
-        const updatedDeviceId = (updatedDevice as any)._id?.toString() || deviceId;
+        const updatedDeviceId =
+          (updatedDevice as any)._id?.toString() || deviceId;
         const deviceName = (updatedDevice as any).name || 'ESP32Controller';
 
         // Use device name as identifier (ESP32 can be configured with this)
@@ -275,6 +372,13 @@ export class DevicesService {
           this.mqttService.publishMotorSwitch(
             deviceIdentifier,
             command.switchMotor ? '2' : '1'
+          );
+        }
+        // Ultrasonic mode - publish to ultrasonic topic
+        if (command.ultrasonic !== undefined) {
+          this.mqttService.publishUltrasonic(
+            deviceIdentifier,
+            command.ultrasonic
           );
         }
       }
@@ -333,29 +437,27 @@ export class DevicesService {
   async saveHourlyEnergyConsumption() {
     try {
       const devices = await this.deviceModel.find({ status: 'ONLINE' }).lean();
-      
+
       for (const device of devices) {
         const deviceId = (device as any)._id.toString();
         const userIds = device.userIds || [];
-        
+
         // Save consumption data for each user assigned to this device
         for (const userId of userIds) {
           if (this.reportsService) {
-            await this.reportsService.saveHourlyConsumption(
-              deviceId,
-              userId,
-              {
-                energyUsed: device.totalElectricity ?? 0,
-                waterUsed: device.totalLitres ?? 0,
-                motorState: device.motorState ?? 'OFF',
-                timerActive: device.timerActive ?? false
-              }
-            );
+            await this.reportsService.saveHourlyConsumption(deviceId, userId, {
+              energyUsed: device.totalElectricity ?? 0,
+              waterUsed: device.totalLitres ?? 0,
+              motorState: device.motorState ?? 'OFF',
+              timerActive: device.timerActive ?? false
+            });
           }
         }
       }
-      
-      this.logger.log(`Saved hourly energy consumption data for ${devices.length} devices`);
+
+      this.logger.log(
+        `Saved hourly energy consumption data for ${devices.length} devices`
+      );
     } catch (error) {
       this.logger.error('Failed to save hourly energy consumption', error);
     }
@@ -402,7 +504,9 @@ export class DevicesService {
 
         // Emit real-time update via WebSocket
         if (updatedDevice && this.devicesGateway) {
-          this.devicesGateway.emitDeviceUpdate(updatedDevice as unknown as Device);
+          this.devicesGateway.emitDeviceUpdate(
+            updatedDevice as unknown as Device
+          );
         }
       } catch (error) {
         this.logger.error(

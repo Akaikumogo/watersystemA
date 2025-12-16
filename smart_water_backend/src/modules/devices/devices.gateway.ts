@@ -71,10 +71,22 @@ export class DevicesGateway implements OnGatewayConnection, OnGatewayDisconnect 
     this.logger.debug(`Device update emitted: ${device._id}`);
   }
 
-  // Emit device status change
-  emitDeviceStatus(deviceId: string, status: 'ONLINE' | 'OFFLINE') {
-    this.server.emit('device:status', { deviceId, status });
-    this.logger.debug(`Device status emitted: ${deviceId} - ${status}`);
+  // Emit device status change (with optional metrics)
+  emitDeviceStatus(payload: {
+    deviceId: string;
+    status: 'ONLINE' | 'OFFLINE';
+    waterDepth?: number;
+    totalLitres?: number;
+    totalElectricity?: number;
+    ultrasonicMode?: boolean;
+    activeMotor2?: boolean;
+    height?: number;
+    motorState?: string;
+  }) {
+    this.server.emit('device:status', payload);
+    this.logger.debug(
+      `Device status emitted: ${payload.deviceId} - ${payload.status}`
+    );
   }
 
   // Emit to specific user's devices

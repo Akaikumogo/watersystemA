@@ -10,8 +10,30 @@ import {
   Tab,
   Input
 } from '@heroui/react';
-import { Zap, Droplet, Calendar } from 'lucide-react';
+import {
+  Zap,
+  Droplet,
+  Calendar
+} from 'lucide-react';
 import { api } from '@/lib/api';
+// TODO: Re-enable when reports feature is fully implemented
+// import {
+//   LineChart,
+//   Line,
+//   BarChart,
+//   Bar,
+//   AreaChart,
+//   Area,
+//   XAxis,
+//   YAxis,
+//   CartesianGrid,
+//   Tooltip as RechartsTooltip,
+//   Legend,
+//   ResponsiveContainer
+// } from 'recharts';
+// import { motion } from 'framer-motion';
+// import jsPDF from 'jspdf';
+// import autoTable from 'jspdf-autotable';
 
 type DeviceReport = {
   deviceId: string;

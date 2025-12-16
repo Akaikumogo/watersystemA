@@ -50,6 +50,12 @@ export class Device extends Document {
   @Prop({ type: Boolean, default: false })
   motorFault!: boolean; // Both motors failed
 
+  @Prop({ type: Boolean, default: true })
+  ultrasonic!: boolean; // Ultrasonic auto mode (true = auto, false = manual)
+
+  @Prop({ type: Boolean, default: false })
+  motorOnline!: boolean; // Motor online/offline status
+
   @Prop({ type: [{ type: String, ref: 'User' }], default: [] })
   userIds!: string[];
 }

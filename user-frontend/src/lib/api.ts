@@ -163,6 +163,7 @@ class ApiClient {
       height?: number;
       timer?: number;
       switchMotor?: boolean;
+      ultrasonic?: boolean;
     }
   ): Promise<Device> {
     const { data } = await this.client.post<{ device: Device }>(

@@ -27,6 +27,7 @@ const getSocketUrl = (): string => {
 class SocketManager {
   private socket: Socket | null = null;
   private socketUrl: string;
+  private subscriptions: Set<string> = new Set(); // QO'SHISH: Subscription'larni saqlash
 
   constructor() {
     this.socketUrl = getSocketUrl();
@@ -59,6 +60,14 @@ class SocketManager {
 
       this.socket.on('connect', () => {
         console.log('WebSocket connected');
+        // QO'SHISH: Reconnect bo'lganda subscription'larni qayta yaratish
+        this.resubscribe();
+      });
+
+      this.socket.on('reconnect', () => {
+        console.log('WebSocket reconnected');
+        // QO'SHISH: Reconnect bo'lganda subscription'larni qayta yaratish
+        this.resubscribe();
       });
 
       this.socket.on('disconnect', () => {
@@ -100,6 +109,23 @@ class SocketManager {
 
   isConnected(): boolean {
     return this.socket?.connected ?? false;
+  }
+
+  // QO'SHISH: Subscription'larni saqlash
+  subscribe(deviceId: string): void {
+    if (this.socket?.connected) {
+      this.socket.emit('subscribe:device', deviceId);
+      this.subscriptions.add(deviceId);
+    }
+  }
+
+  // QO'SHISH: Barcha subscription'larni qayta yaratish
+  private resubscribe(): void {
+    if (this.socket?.connected) {
+      this.subscriptions.forEach(deviceId => {
+        this.socket?.emit('subscribe:device', deviceId);
+      });
+    }
   }
 }
 
