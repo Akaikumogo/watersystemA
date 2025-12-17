@@ -8,6 +8,7 @@ import { DevicesController } from './devices.controller';
 import { DevicesGateway } from './devices.gateway';
 import { MqttModule } from '../mqtt/mqtt.module';
 import { ReportsModule } from '../reports/reports.module';
+import { PushModule } from '../push/push.module';
 
 @Module({
   imports: [
@@ -21,7 +22,8 @@ import { ReportsModule } from '../reports/reports.module';
       inject: [ConfigService]
     }),
     forwardRef(() => MqttModule),
-    forwardRef(() => ReportsModule)
+    forwardRef(() => ReportsModule),
+    PushModule
   ],
   controllers: [DevicesController],
   providers: [DevicesService, DevicesGateway],

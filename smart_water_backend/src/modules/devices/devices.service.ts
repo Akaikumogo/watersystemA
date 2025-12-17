@@ -16,6 +16,7 @@ import { DeviceCommandDto } from './dto/device-command.dto';
 import { MqttService } from '../mqtt/mqtt.service';
 import { DevicesGateway } from './devices.gateway';
 import { ReportsService } from '../reports/reports.service';
+import { PushService } from '../push/push.service';
 
 type SensorSnapshot = {
   deviceName?: string;
@@ -29,6 +30,8 @@ type SensorSnapshot = {
   timerDuration?: number;
   motorOnline?: boolean;
   motorBy?: string; // Event type: BOOT, MANUAL_ON, TIMER_START, etc.
+  ultrasonicMode?: boolean; // true=AUTO, false=MANUAL
+  activeMotor2?: boolean; // false=motor1, true=motor2
 };
 
 @Injectable()
@@ -42,8 +45,41 @@ export class DevicesService {
     @Inject(forwardRef(() => DevicesGateway))
     private readonly devicesGateway?: DevicesGateway,
     @Inject(forwardRef(() => ReportsService))
-    private readonly reportsService?: ReportsService
+    private readonly reportsService?: ReportsService,
+    private readonly pushService?: PushService
   ) {}
+
+  private normalizeMotorState(state: unknown): 'ON' | 'OFF' | string {
+    const s = String(state ?? '')
+      .trim()
+      .toUpperCase();
+    if (s === 'ON') return 'ON';
+    if (s === 'OFF') return 'OFF';
+    return s || 'OFF';
+  }
+
+  private motorTitleAndBody(input: {
+    deviceName: string;
+    mode: 'manual' | 'sensor' | 'generic';
+    state: 'ON' | 'OFF';
+  }) {
+    if (input.mode === 'manual') {
+      return {
+        title: 'Manual rejim',
+        body: `${input.deviceName}: motor ${input.state === 'ON' ? 'yoqildi' : "o'chirildi"}`
+      };
+    }
+    if (input.mode === 'sensor') {
+      return {
+        title: 'Sensor',
+        body: `${input.deviceName}: motor ${input.state === 'ON' ? 'yoqildi' : "o'chirildi"}`
+      };
+    }
+    return {
+      title: input.state === 'ON' ? 'Motor yoqildi' : "Motor o'chirildi",
+      body: `${input.deviceName}: motor ${input.state}`
+    };
+  }
 
   async findAll() {
     return this.deviceModel.find().lean();
@@ -128,6 +164,8 @@ export class DevicesService {
 
     const name = snapshot.deviceName;
     const now = new Date();
+    const prev = await this.deviceModel.findOne({ name }).lean();
+
     const update = {
       name,
       location: snapshot.location ?? 'Remote node',
@@ -143,16 +181,109 @@ export class DevicesService {
         snapshot.timerActive && snapshot.timerDuration
           ? snapshot.timerDuration
           : 0,
-      motorOnline: snapshot.motorOnline ?? false
+      motorOnline: snapshot.motorOnline ?? false,
+      ultrasonic:
+        snapshot.ultrasonicMode !== undefined
+          ? Boolean(snapshot.ultrasonicMode)
+          : undefined,
+      activeMotor2:
+        snapshot.activeMotor2 !== undefined
+          ? Boolean(snapshot.activeMotor2)
+          : undefined
     };
 
     const device = await this.deviceModel
       .findOneAndUpdate(
         { name },
-        { $set: update },
+        {
+          $set: Object.fromEntries(
+            Object.entries(update).filter(([, v]) => v !== undefined)
+          )
+        },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       )
       .lean();
+
+    // Push notifications based on ESP32 events (edge-triggered)
+    try {
+      const prevMotor = this.normalizeMotorState((prev as any)?.motorState);
+      const nextMotor = this.normalizeMotorState((device as any)?.motorState);
+      const userIds = ((device as any)?.userIds ?? []).map(String);
+      const deviceId = (device as any)?._id?.toString?.();
+      const deviceName = String((device as any)?.name ?? name);
+      const ultrasonic = Boolean((device as any)?.ultrasonic); // true=AUTO, false=MANUAL
+      const motorBy = String(snapshot.motorBy ?? '').toUpperCase();
+
+      if (this.pushService && prev && userIds.length && deviceId) {
+        // 1) Manual mode motor on/off (ultrasonic=false + MANUAL_ON/OFF)
+        if (!ultrasonic && (motorBy === 'MANUAL_ON' || motorBy === 'MANUAL_OFF')) {
+          if (prevMotor !== nextMotor && (nextMotor === 'ON' || nextMotor === 'OFF')) {
+            const msg = this.motorTitleAndBody({
+              deviceName,
+              mode: 'manual',
+              state: nextMotor as 'ON' | 'OFF'
+            });
+            await this.pushService.sendToUsers({
+              userIds,
+              title: msg.title,
+              body: msg.body,
+              data: { deviceId, eventType: nextMotor === 'ON' ? 'MANUAL_MOTOR_ON' : 'MANUAL_MOTOR_OFF' }
+            });
+          }
+        }
+
+        // 2) Sensor/auto mode motor on/off (ultrasonic=true + AUTO_LEVEL/_OFF)
+        if (ultrasonic && (motorBy === 'AUTO_LEVEL' || motorBy === 'AUTO_LEVEL_OFF')) {
+          if (prevMotor !== nextMotor && (nextMotor === 'ON' || nextMotor === 'OFF')) {
+            const msg = this.motorTitleAndBody({
+              deviceName,
+              mode: 'sensor',
+              state: nextMotor as 'ON' | 'OFF'
+            });
+            await this.pushService.sendToUsers({
+              userIds,
+              title: msg.title,
+              body: msg.body,
+              data: { deviceId, eventType: nextMotor === 'ON' ? 'SENSOR_MOTOR_ON' : 'SENSOR_MOTOR_OFF' }
+            });
+          }
+        }
+
+        // 3) Timer started (TIMER_START) => "timer o'rnatildi motor yoqildi"
+        if (motorBy === 'TIMER_START') {
+          const prevTimer = Boolean((prev as any)?.timerActive);
+          const nextTimer = Boolean((device as any)?.timerActive);
+          if (!prevTimer && nextTimer) {
+            await this.pushService.sendToUsers({
+              userIds,
+              title: "Timer o'rnatildi",
+              body: `${deviceName}: motor yoqildi`,
+              data: { deviceId, eventType: 'TIMER_SET' }
+            });
+          }
+        }
+
+        // 4) Motor switched (if ESP32 sends activeMotor2)
+        if (snapshot.activeMotor2 !== undefined) {
+          const prevActive = Boolean((prev as any)?.activeMotor2);
+          const nextActive = Boolean((device as any)?.activeMotor2);
+          if (prev && prevActive !== nextActive) {
+            await this.pushService.sendToUsers({
+              userIds,
+              title: 'Motor almashtirildi',
+              body: `${deviceName}: aktiv motor ${nextActive ? '2' : '1'}`,
+              data: { deviceId, eventType: 'MOTOR_SWITCH', activeMotor: nextActive ? '2' : '1' }
+            });
+          }
+        }
+      }
+    } catch (e) {
+      this.logger.warn(
+        `Push send failed (upsertSensorSnapshot): ${
+          e instanceof Error ? e.message : String(e)
+        }`
+      );
+    }
 
     // Send device settings to ESP32 when it first connects (BOOT event)
     // Check if this is a BOOT event by checking motorBy field
@@ -207,6 +338,8 @@ export class DevicesService {
     const normalized = data.status?.toLowerCase();
     const deviceStatus: DeviceStatus =
       normalized === 'offline' ? 'OFFLINE' : 'ONLINE';
+
+    const prev = await this.deviceModel.findOne({ name }).lean();
 
     const updateFields: any = {
       status: deviceStatus,
@@ -346,6 +479,70 @@ export class DevicesService {
 
     if (!updatedDevice) {
       throw new NotFoundException('Device not found');
+    }
+
+    // Push: command-based events (edge-triggered)
+    try {
+      const userIds = ((updatedDevice as any)?.userIds ?? []).map(String);
+      const deviceIdStr = (updatedDevice as any)?._id?.toString?.();
+      const deviceName = String((updatedDevice as any)?.name ?? 'Device');
+      const ultrasonic = Boolean((updatedDevice as any)?.ultrasonic); // true=AUTO, false=MANUAL
+      if (this.pushService && userIds.length && deviceIdStr) {
+        // Manual mode (ultrasonic=false): motor on/off
+        if (command.motor !== undefined && !ultrasonic) {
+          const prevMotor = this.normalizeMotorState((device as any)?.motorState);
+          const nextMotor = this.normalizeMotorState(command.motor);
+          if (prevMotor !== nextMotor && (nextMotor === 'ON' || nextMotor === 'OFF')) {
+            const msg = this.motorTitleAndBody({
+              deviceName,
+              mode: 'manual',
+              state: nextMotor as 'ON' | 'OFF'
+            });
+            await this.pushService.sendToUsers({
+              userIds,
+              title: msg.title,
+              body: msg.body,
+              data: {
+                deviceId: deviceIdStr,
+                eventType: nextMotor === 'ON' ? 'MANUAL_MOTOR_ON' : 'MANUAL_MOTOR_OFF'
+              }
+            });
+          }
+        }
+
+        // Timer set: "timer o'rnatildi motor yoqildi"
+        if (command.timer !== undefined) {
+          await this.pushService.sendToUsers({
+            userIds,
+            title: "Timer o'rnatildi",
+            body: `${deviceName}: ${Number(command.timer)} s, motor yoqildi`,
+            data: { deviceId: deviceIdStr, eventType: 'TIMER_SET' }
+          });
+        }
+
+        if (command.switchMotor !== undefined) {
+          const prevActive = Boolean((device as any)?.activeMotor2);
+          const nextActive = Boolean(command.switchMotor);
+          if (prevActive !== nextActive) {
+            await this.pushService.sendToUsers({
+              userIds,
+              title: 'Motor almashtirildi',
+              body: `${deviceName}: aktiv motor ${nextActive ? '2' : '1'}`,
+              data: {
+                deviceId: deviceIdStr,
+                eventType: 'MOTOR_SWITCH',
+                activeMotor: nextActive ? '2' : '1'
+              }
+            });
+          }
+        }
+      }
+    } catch (e) {
+      this.logger.warn(
+        `Push send failed (sendCommand): ${
+          e instanceof Error ? e.message : String(e)
+        }`
+      );
     }
 
     // Send command to ESP32 via MQTT with device ID in topic
@@ -509,6 +706,27 @@ export class DevicesService {
         if (updatedDevice && this.devicesGateway) {
           this.devicesGateway.emitDeviceUpdate(
             updatedDevice as unknown as Device
+          );
+        }
+
+        // Push: timer ended => motor OFF
+        try {
+          const userIds = ((updatedDevice as any)?.userIds ?? []).map(String);
+          const deviceId = (updatedDevice as any)?._id?.toString?.();
+          const deviceName = String((updatedDevice as any)?.name ?? 'Device');
+          if (this.pushService && userIds.length && deviceId) {
+            await this.pushService.sendToUsers({
+              userIds,
+              title: 'Timer tugadi',
+              body: `${deviceName}: motor o'chirildi`,
+              data: { deviceId, eventType: 'TIMER_END' }
+            });
+          }
+        } catch (e) {
+          this.logger.warn(
+            `Push send failed (checkTimers): ${
+              e instanceof Error ? e.message : String(e)
+            }`
           );
         }
       } catch (error) {

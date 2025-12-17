@@ -240,7 +240,13 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
         timerActive: Boolean(data.timerActive),
         timerDuration: this.toNumber(data.timerDuration),
         motorOnline: Boolean(data.motorOnline),
-        motorBy: data.motorBy
+        motorBy: data.motorBy,
+        ultrasonicMode:
+          data.ultrasonicMode !== undefined
+            ? Boolean(data.ultrasonicMode)
+            : undefined,
+        activeMotor2:
+          data.activeMotor2 !== undefined ? Boolean(data.activeMotor2) : undefined
       });
 
       this.logger.debug(`Processed sensor data for device: ${deviceName}`);
