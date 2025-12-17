@@ -39,6 +39,11 @@ lerna-debug.log*
 .env.local
 .env.*.local
 
+# Secrets (do not commit)
+firebase-service-account.json
+service-account.json
+firebase-adminsdk*.json
+
 # Build
 *.tsbuildinfo
 

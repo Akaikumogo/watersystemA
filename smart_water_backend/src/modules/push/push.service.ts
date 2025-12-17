@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as fs from 'fs';
+import * as nodePath from 'path';
 import * as admin from 'firebase-admin';
 import { PushToken } from './schemas/push-token.schema';
 
@@ -115,7 +116,7 @@ export class PushService {
     if (this.firebaseApp) return this.firebaseApp;
 
     const json = this.config.get<string>('FCM_SERVICE_ACCOUNT_JSON');
-    const path = this.config.get<string>('FCM_SERVICE_ACCOUNT_PATH');
+    const pathFromEnv = this.config.get<string>('FCM_SERVICE_ACCOUNT_PATH');
 
     let creds: admin.ServiceAccount | undefined;
     if (json) {
@@ -125,19 +126,45 @@ export class PushService {
         this.logger.error('FCM_SERVICE_ACCOUNT_JSON is not valid JSON');
         return null;
       }
-    } else if (path) {
+    } else if (pathFromEnv) {
       try {
-        const raw = fs.readFileSync(path, 'utf8');
+        const raw = fs.readFileSync(pathFromEnv, 'utf8');
         creds = JSON.parse(raw);
       } catch (e) {
         this.logger.error(
-          `Failed to read FCM service account from path: ${path}`,
+          `Failed to read FCM service account from path: ${pathFromEnv}`,
           e instanceof Error ? e.message : String(e)
         );
         return null;
       }
     } else {
-      return null;
+      // No env configuration: try repo-local files (static setup)
+      const candidates = [
+        nodePath.join(process.cwd(), 'firebase-service-account.json'),
+        nodePath.join(process.cwd(), 'service-account.json')
+      ];
+
+      const found = candidates.find((p) => {
+        try {
+          return fs.existsSync(p);
+        } catch {
+          return false;
+        }
+      });
+
+      if (!found) return null;
+
+      try {
+        const raw = fs.readFileSync(found, 'utf8');
+        creds = JSON.parse(raw);
+        this.logger.log(`Loaded FCM service account from file: ${found}`);
+      } catch (e) {
+        this.logger.error(
+          `Failed to read FCM service account from file: ${found}`,
+          e instanceof Error ? e.message : String(e)
+        );
+        return null;
+      }
     }
 
     try {
