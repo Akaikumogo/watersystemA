@@ -93,7 +93,13 @@
     "ultrasonicMode": "Ultrasonik avtomatik rejim",
     "ultrasonicAutoDesc": "Avtomatik: Nasos suv darajasiga qarab yoqiladi/o'chadi",
     "ultrasonicManualDesc": "Qo'lda: Nasos faqat tugmalar va timer orqali boshqariladi",
-    "offlineWarning": "Qurilma oflayn. Barcha amallar o'chirilgan."
+    "offlineWarning": "Qurilma oflayn. Barcha amallar o'chirilgan.",
+    "voiceUnsupportedBrowser": "Brauzeringizda ovozli tanish qo'llab-quvvatlanmaydi",
+    "voiceUnsupportedDevice": "Qurilmada ovozli tanish mavjud emas",
+    "voicePermissionDenied": "Mikrofon ruxsati berilmadi",
+    "voiceError": "Ovozli tanishda xatolik",
+    "voiceStartFailed": "Ovozli tinglashni boshlab bo'lmadi",
+    "voiceErrorWithReason": "Ovoz xatosi: {{reason}}"
   },
   "settings": {
     "title": "Sozlamalar",
@@ -105,8 +111,6 @@
     "selectLanguage": "Tilni tanlang"
   },
   "reports": {
-    "yearly": "Yillik",
-    "selectYear": "Yilni tanlang",
     "title": "Hisobotlar",
     "daily": "Kunlik",
     "weekly": "Haftalik",
@@ -123,6 +127,8 @@
     "totalEnergy": "Jami elektr",
     "totalWater": "Jami suv",
     "weekPeriod": "Hafta davri",
-    "noData": "Ma'lumot topilmadi"
+    "noData": "Ma'lumot topilmadi",
+    "downloadPdf": "PDF yuklash",
+    "pdfError": "PDF yaratish yoki saqlashda xatolik"
   }
 }

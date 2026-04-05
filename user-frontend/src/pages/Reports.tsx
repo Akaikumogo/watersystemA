@@ -10,30 +10,10 @@ import {
   Tab,
   Input
 } from '@heroui/react';
-import {
-  Zap,
-  Droplet,
-  Calendar
-} from 'lucide-react';
+import { Zap, Droplet, Calendar, FileDown } from 'lucide-react';
 import { api } from '@/lib/api';
-// TODO: Re-enable when reports feature is fully implemented
-// import {
-//   LineChart,
-//   Line,
-//   BarChart,
-//   Bar,
-//   AreaChart,
-//   Area,
-//   XAxis,
-//   YAxis,
-//   CartesianGrid,
-//   Tooltip as RechartsTooltip,
-//   Legend,
-//   ResponsiveContainer
-// } from 'recharts';
-// import { motion } from 'framer-motion';
-// import jsPDF from 'jspdf';
-// import autoTable from 'jspdf-autotable';
+import { buildReportPdfPayload } from '@/lib/reportPdf';
+import { saveOrSharePdfBase64 } from '@/lib/saveReportPdf';
 
 type DeviceReport = {
   deviceId: string;
@@ -80,6 +60,8 @@ export const Reports: React.FC = () => {
   const [activeTab, setActiveTab] = useState('daily');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   // Daily report
   const [dailyReport, setDailyReport] = useState<DailyReport | null>(null);
@@ -163,6 +145,7 @@ export const Reports: React.FC = () => {
   }, [year, t]);
 
   useEffect(() => {
+    setPdfError(null);
     if (activeTab === 'daily') {
       loadDailyReport();
     } else if (activeTab === 'weekly') {
@@ -179,6 +162,66 @@ export const Reports: React.FC = () => {
     loadMonthlyReport,
     loadYearlyReport
   ]);
+
+  const exportCurrentPdf = useCallback(async () => {
+    try {
+      setPdfBusy(true);
+      setPdfError(null);
+      if (activeTab === 'daily' && dailyReport) {
+        const { base64, filename } = buildReportPdfPayload({
+          kind: 'daily',
+          report: dailyReport,
+          title: `${t('reports.title')} — ${t('reports.daily')}`
+        });
+        await saveOrSharePdfBase64(base64, filename);
+        return;
+      }
+      if (activeTab === 'weekly' && weeklyReport) {
+        const { base64, filename } = buildReportPdfPayload({
+          kind: 'weekly',
+          report: weeklyReport,
+          title: `${t('reports.title')} — ${t('reports.weekly')}`
+        });
+        await saveOrSharePdfBase64(base64, filename);
+        return;
+      }
+      if (activeTab === 'monthly' && monthlyReport) {
+        const { base64, filename } = buildReportPdfPayload({
+          kind: 'monthly',
+          report: monthlyReport,
+          title: `${t('reports.title')} — ${t('reports.monthly')}`
+        });
+        await saveOrSharePdfBase64(base64, filename);
+        return;
+      }
+      if (activeTab === 'yearly' && yearlyReport) {
+        const { base64, filename } = buildReportPdfPayload({
+          kind: 'yearly',
+          report: yearlyReport,
+          title: `${t('reports.title')} — ${t('reports.yearly')}`
+        });
+        await saveOrSharePdfBase64(base64, filename);
+      }
+    } catch {
+      setPdfError(t('reports.pdfError'));
+    } finally {
+      setPdfBusy(false);
+    }
+  }, [
+    activeTab,
+    dailyReport,
+    weeklyReport,
+    monthlyReport,
+    yearlyReport,
+    t
+  ]);
+
+  const canExportPdf =
+    !loading &&
+    ((activeTab === 'daily' && !!dailyReport) ||
+      (activeTab === 'weekly' && !!weeklyReport) ||
+      (activeTab === 'monthly' && !!monthlyReport) ||
+      (activeTab === 'yearly' && !!yearlyReport));
 
   const renderDeviceCard = (device: DeviceReport) => (
     <Card key={device.deviceId} className="premium-card">
@@ -233,7 +276,7 @@ export const Reports: React.FC = () => {
         >
           <Tab key="daily" title={t('reports.daily')}>
             <div className="space-y-4">
-              <div className="flex gap-4 items-end">
+              <div className="flex flex-wrap gap-4 items-end">
                 <Input
                   type="date"
                   label={t('reports.selectDate')}
@@ -249,7 +292,24 @@ export const Reports: React.FC = () => {
                 >
                   {t('reports.load')}
                 </Button>
+                <Button
+                  variant="bordered"
+                  startContent={<FileDown className="w-4 h-4" />}
+                  onPress={exportCurrentPdf}
+                  isDisabled={!canExportPdf}
+                  isLoading={pdfBusy}
+                >
+                  {t('reports.downloadPdf')}
+                </Button>
               </div>
+
+              {pdfError && (
+                <Card className="mb-4">
+                  <CardBody>
+                    <p className="text-danger text-sm">{pdfError}</p>
+                  </CardBody>
+                </Card>
+              )}
 
               {error && (
                 <Card className="mb-4">
@@ -319,7 +379,7 @@ export const Reports: React.FC = () => {
 
           <Tab key="weekly" title={t('reports.weekly')}>
             <div className="space-y-4">
-              <div className="flex gap-4 items-end">
+              <div className="flex flex-wrap gap-4 items-end">
                 <Input
                   type="date"
                   label={t('reports.selectWeekStart')}
@@ -334,7 +394,24 @@ export const Reports: React.FC = () => {
                 >
                   {t('reports.load')}
                 </Button>
+                <Button
+                  variant="bordered"
+                  startContent={<FileDown className="w-4 h-4" />}
+                  onPress={exportCurrentPdf}
+                  isDisabled={!canExportPdf}
+                  isLoading={pdfBusy}
+                >
+                  {t('reports.downloadPdf')}
+                </Button>
               </div>
+
+              {pdfError && (
+                <Card className="mb-4">
+                  <CardBody>
+                    <p className="text-danger text-sm">{pdfError}</p>
+                  </CardBody>
+                </Card>
+              )}
 
               {error && (
                 <Card className="mb-4">
@@ -410,7 +487,7 @@ export const Reports: React.FC = () => {
 
           <Tab key="monthly" title={t('reports.monthly')}>
             <div className="space-y-4">
-              <div className="flex gap-4 items-end">
+              <div className="flex flex-wrap gap-4 items-end">
                 <Input
                   type="month"
                   label={t('reports.selectMonth')}
@@ -425,7 +502,24 @@ export const Reports: React.FC = () => {
                 >
                   {t('reports.load')}
                 </Button>
+                <Button
+                  variant="bordered"
+                  startContent={<FileDown className="w-4 h-4" />}
+                  onPress={exportCurrentPdf}
+                  isDisabled={!canExportPdf}
+                  isLoading={pdfBusy}
+                >
+                  {t('reports.downloadPdf')}
+                </Button>
               </div>
+
+              {pdfError && (
+                <Card className="mb-4">
+                  <CardBody>
+                    <p className="text-danger text-sm">{pdfError}</p>
+                  </CardBody>
+                </Card>
+              )}
 
               {error && (
                 <Card className="mb-4">
@@ -495,7 +589,7 @@ export const Reports: React.FC = () => {
 
           <Tab key="yearly" title={t('reports.yearly')}>
             <div className="space-y-4">
-              <div className="flex gap-4 items-end">
+              <div className="flex flex-wrap gap-4 items-end">
                 <Input
                   type="number"
                   label={t('reports.selectYear')}
@@ -512,7 +606,24 @@ export const Reports: React.FC = () => {
                 >
                   {t('reports.load')}
                 </Button>
+                <Button
+                  variant="bordered"
+                  startContent={<FileDown className="w-4 h-4" />}
+                  onPress={exportCurrentPdf}
+                  isDisabled={!canExportPdf}
+                  isLoading={pdfBusy}
+                >
+                  {t('reports.downloadPdf')}
+                </Button>
               </div>
+
+              {pdfError && (
+                <Card className="mb-4">
+                  <CardBody>
+                    <p className="text-danger text-sm">{pdfError}</p>
+                  </CardBody>
+                </Card>
+              )}
 
               {error && (
                 <Card className="mb-4">

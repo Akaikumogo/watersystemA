@@ -92,7 +92,13 @@
     "ultrasonicMode": "Ultrasonic Auto Mode",
     "ultrasonicAutoDesc": "Auto: Motor turns on/off based on water level",
     "ultrasonicManualDesc": "Manual: Motor control only via buttons and timer",
-    "offlineWarning": "Device is offline. All actions are disabled."
+    "offlineWarning": "Device is offline. All actions are disabled.",
+    "voiceUnsupportedBrowser": "Voice recognition is not supported in this browser",
+    "voiceUnsupportedDevice": "Voice recognition is not available on this device",
+    "voicePermissionDenied": "Microphone permission was denied",
+    "voiceError": "Voice recognition failed",
+    "voiceStartFailed": "Could not start voice recognition",
+    "voiceErrorWithReason": "Voice error: {{reason}}"
   },
   "settings": {
     "title": "Settings",
@@ -120,6 +126,8 @@
     "totalEnergy": "Total Energy",
     "totalWater": "Total Water",
     "weekPeriod": "Week Period",
-    "noData": "No data available"
+    "noData": "No data available",
+    "downloadPdf": "Download PDF",
+    "pdfError": "Could not create or save the PDF"
   }
 }

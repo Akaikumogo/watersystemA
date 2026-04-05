@@ -2,6 +2,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useVoiceCommand } from './useVoiceCommand';
 
+vi.mock('@capacitor/core', () => ({
+  Capacitor: { isNativePlatform: () => false }
+}));
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => key
+  })
+}));
+
 // Mock Web Speech API
 const mockRecognition = {
   continuous: false,
@@ -44,7 +54,7 @@ describe('useVoiceCommand', () => {
     const onCommand = vi.fn();
     const { result } = renderHook(() => useVoiceCommand(onCommand, 'uz'));
 
-    expect(result.current.error).toContain('not supported');
+    expect(result.current.error).toBe('device.voiceUnsupportedBrowser');
   });
 
   it('should start listening when startListening is called', () => {
