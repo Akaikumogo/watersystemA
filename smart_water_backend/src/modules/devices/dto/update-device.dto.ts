@@ -5,7 +5,7 @@ import {
   IsOptional,
   IsNumber,
   IsArray,
-  IsMongoId,
+  IsUUID,
   IsBoolean,
   Min
 } from 'class-validator';
@@ -109,13 +109,16 @@ export class UpdateDeviceDto {
 
   @ApiPropertyOptional({
     type: [String],
-    description: 'Array of user IDs assigned to this device',
-    example: ['507f1f77bcf86cd799439011', '507f191e810c19729de860ea'],
+    description: 'Array of user IDs (UUID) assigned to this device',
+    example: [
+      'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
+      'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e'
+    ],
     isArray: true
   })
   @IsOptional()
   @IsArray()
-  @IsMongoId({ each: true })
+  @IsUUID('all', { each: true })
   userIds?: string[];
 
   @ApiPropertyOptional({

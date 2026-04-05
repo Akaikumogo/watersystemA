@@ -58,6 +58,7 @@
     "createError": "Qurilma yaratishda xatolik",
     "assignSuccess": "Foydalanuvchilar muvaffaqiyatli qo'shildi",
     "assignError": "Foydalanuvchilarni qo'shishda xatolik",
+    "assignSelectAtLeastOne": "Kamida bitta foydalanuvchi tanlang",
     "powerUsage": "Quvvat (W)",
     "optional": "Ixtiyoriy",
     "control": "Boshqarish",

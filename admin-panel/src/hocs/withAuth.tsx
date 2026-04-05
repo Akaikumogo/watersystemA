@@ -1,47 +1,47 @@
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useAuthStore } from '@/store/authStore'
+import { useEffect, useState, type ComponentType } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '@/store/authStore';
 
-export const withAuth = <P extends object>(Component: React.ComponentType<P>) => {
-  return (props: P) => {
-    const navigate = useNavigate()
-    const { isAuthenticated, initialize } = useAuthStore()
-    const [isChecking, setIsChecking] = useState(true)
+/**
+ * Protects routes using the same auth source as the rest of the app:
+ * Zustand + persist (`auth-storage`). Waits for persist rehydration before deciding.
+ */
+export const withAuth = <P extends object>(Component: ComponentType<P>) => {
+  function AuthenticatedRoute(props: P) {
+    const navigate = useNavigate();
+    const token = useAuthStore((s) => s.token);
+    const user = useAuthStore((s) => s.user);
+    const [hydrated, setHydrated] = useState(() =>
+      useAuthStore.persist.hasHydrated()
+    );
 
-    // Initialize auth state and check localStorage on mount
     useEffect(() => {
-      initialize()
-      
-      // Check localStorage directly - this is the source of truth
-      const token = localStorage.getItem('token')
-      const user = localStorage.getItem('user')
-      
-      if (!token || !user) {
-        navigate('/login', { replace: true })
-        return
+      const unsub = useAuthStore.persist.onFinishHydration(() => {
+        setHydrated(true);
+      });
+      if (useAuthStore.persist.hasHydrated()) {
+        setHydrated(true);
       }
-      
-      // Small delay to ensure state is synced
-      setTimeout(() => {
-        setIsChecking(false)
-      }, 100)
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+      return unsub;
+    }, []);
 
-    // Show nothing while checking
-    if (isChecking) {
-      return null
+    useEffect(() => {
+      if (!hydrated) return;
+      if (!token || !user) {
+        navigate('/login', { replace: true });
+      }
+    }, [hydrated, token, user, navigate]);
+
+    if (!hydrated) {
+      return null;
     }
 
-    // Final check before rendering - use localStorage as source of truth
-    const token = localStorage.getItem('token')
-    const user = localStorage.getItem('user')
-    
     if (!token || !user) {
-      return null
+      return null;
     }
 
-    return <Component {...props} />
+    return <Component {...props} />;
   }
-}
 
+  return AuthenticatedRoute;
+};

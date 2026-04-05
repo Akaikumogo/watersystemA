@@ -7,9 +7,9 @@ import {
 } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import { useLanguageStore } from '@/store/languageStore';
 import { useAuthStore } from '@/store/authStore';
+import i18n from '@/i18n/config';
 import { withAuth } from '@/hocs/withAuth';
 import { withPageTransition } from '@/hocs/withPageTransition';
 import { Login } from '@/pages/Login';
@@ -60,19 +60,12 @@ const DashboardLayout = withAuth(() => {
 });
 
 function App() {
-  const { i18n } = useTranslation();
   const { language } = useLanguageStore();
-  const { isAuthenticated, initialize } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
 
   useEffect(() => {
-    i18n.changeLanguage(language);
-  }, [language, i18n]);
-
-  // Initialize auth state from localStorage on mount
-  useEffect(() => {
-    initialize();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void i18n.changeLanguage(language);
+  }, [language]);
 
   return (
     <ErrorBoundary>

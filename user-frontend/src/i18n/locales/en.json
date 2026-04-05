@@ -58,6 +58,7 @@
     "createError": "Failed to create device",
     "assignSuccess": "Users assigned successfully",
     "assignError": "Failed to assign users",
+    "assignSelectAtLeastOne": "Select at least one user",
     "powerUsage": "Power Usage (W)",
     "optional": "Optional",
     "control": "Control",

@@ -39,6 +39,23 @@ const getApiBaseUrl = (): string => {
 
 const API_BASE_URL = getApiBaseUrl();
 
+/** Backend may send `id` and/or `_id` (Postgres UUID); UI expects `_id`. */
+function normalizeUser(raw: User & { id?: string }): User {
+  const _id = String(raw._id ?? raw.id ?? '').trim();
+  if (!_id) {
+    throw new Error('Invalid user: missing id');
+  }
+  return { ...raw, _id };
+}
+
+function normalizeDevice(raw: Device & { id?: string }): Device {
+  const _id = String(raw._id ?? raw.id ?? '').trim();
+  if (!_id) {
+    throw new Error('Invalid device: missing id');
+  }
+  return { ...raw, _id };
+}
+
 class ApiClient {
   private client: AxiosInstance;
 
@@ -85,7 +102,10 @@ class ApiClient {
       '/auth/login',
       credentials
     );
-    return data;
+    return {
+      ...data,
+      user: normalizeUser(data.user as User & { id?: string })
+    };
   }
 
   async register(
@@ -100,25 +120,25 @@ class ApiClient {
 
   async getCurrentUser(): Promise<User> {
     const { data } = await this.client.get<User>('/auth/me');
-    return data;
+    return normalizeUser(data as User & { id?: string });
   }
 
   async updatePreferences(language: 'uz' | 'en' | 'ru'): Promise<User> {
     const { data } = await this.client.patch<User>('/auth/preferences', {
       language
     });
-    return data;
+    return normalizeUser(data as User & { id?: string });
   }
 
   // Devices
   async getDevices(): Promise<Device[]> {
     const { data } = await this.client.get<Device[]>('/devices');
-    return data;
+    return data.map((d) => normalizeDevice(d as Device & { id?: string }));
   }
 
   async getDevice(id: string): Promise<Device> {
     const { data } = await this.client.get<Device>(`/devices/${id}`);
-    return data;
+    return normalizeDevice(data as Device & { id?: string });
   }
 
   async getUserDevices(): Promise<Device[]> {
@@ -129,7 +149,7 @@ class ApiClient {
     const { data } = await this.client.get<Device[]>(
       `/devices/user/${user._id}`
     );
-    return data;
+    return data.map((d) => normalizeDevice(d as Device & { id?: string }));
   }
 
   async createDevice(deviceData: {
@@ -140,20 +160,21 @@ class ApiClient {
     userIds?: string[];
   }): Promise<Device> {
     const { data } = await this.client.post<Device>('/devices', deviceData);
-    return data;
+    return normalizeDevice(data as Device & { id?: string });
   }
 
   async assignUsers(deviceId: string, userIds: string[]): Promise<Device> {
+    const cleaned = userIds.map((x) => String(x).trim()).filter(Boolean);
     const { data } = await this.client.post<Device>(
       `/devices/${deviceId}/assign-users`,
-      { userIds }
+      { userIds: cleaned }
     );
-    return data;
+    return normalizeDevice(data as Device & { id?: string });
   }
 
   async getUsers(): Promise<User[]> {
     const { data } = await this.client.get<User[]>('/users');
-    return data;
+    return data.map((u) => normalizeUser(u as User & { id?: string }));
   }
 
   async sendDeviceCommand(
@@ -170,7 +191,7 @@ class ApiClient {
       `/devices/${deviceId}/command`,
       command
     );
-    return data.device;
+    return normalizeDevice(data.device as Device & { id?: string });
   }
 
   // Reports

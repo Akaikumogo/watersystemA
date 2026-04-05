@@ -258,11 +258,19 @@ export const DeviceDetail: React.FC = () => {
   const handleAssignUsers = async () => {
     if (!device || !id) return;
 
+    const idsToAssign = selectedUserIds
+      .map((x) => String(x).trim())
+      .filter(Boolean);
+    if (idsToAssign.length === 0) {
+      setAssignError(t('device.assignSelectAtLeastOne'));
+      return;
+    }
+
     try {
       setIsAssigning(true);
       setAssignError(null);
 
-      const updatedDevice = await api.assignUsers(id, selectedUserIds);
+      const updatedDevice = await api.assignUsers(id, idsToAssign);
       setDevice(updatedDevice);
       updateDevice(updatedDevice);
 
