@@ -6,10 +6,10 @@ import {
   forwardRef,
   Logger
 } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, LessThan, LessThanOrEqual } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { Device, DeviceStatus } from './schemas/device.schema';
+import { Device, DeviceStatus } from './schemas/device.entity';
 import { CreateDeviceDto } from './dto/create-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
 import { DeviceCommandDto } from './dto/device-command.dto';
@@ -17,6 +17,7 @@ import { MqttService } from '../mqtt/mqtt.service';
 import { DevicesGateway } from './devices.gateway';
 import { ReportsService } from '../reports/reports.service';
 import { PushService } from '../push/push.service';
+import { toApiDoc } from '../../common/utils/mongo-compat';
 
 type SensorSnapshot = {
   deviceName?: string;
@@ -29,9 +30,9 @@ type SensorSnapshot = {
   timerActive?: boolean;
   timerDuration?: number;
   motorOnline?: boolean;
-  motorBy?: string; // Event type: BOOT, MANUAL_ON, TIMER_START, etc.
-  ultrasonicMode?: boolean; // true=AUTO, false=MANUAL
-  activeMotor2?: boolean; // false=motor1, true=motor2
+  motorBy?: string;
+  ultrasonicMode?: boolean;
+  activeMotor2?: boolean;
 };
 
 @Injectable()
@@ -39,7 +40,7 @@ export class DevicesService {
   private readonly logger = new Logger(DevicesService.name);
 
   constructor(
-    @InjectModel(Device.name) private readonly deviceModel: Model<Device>,
+    @InjectRepository(Device) private readonly deviceRepo: Repository<Device>,
     @Inject(forwardRef(() => MqttService))
     private readonly mqttService?: MqttService,
     @Inject(forwardRef(() => DevicesGateway))
@@ -48,6 +49,10 @@ export class DevicesService {
     private readonly reportsService?: ReportsService,
     private readonly pushService?: PushService
   ) {}
+
+  private leanDevice(d: Device) {
+    return toApiDoc(JSON.parse(JSON.stringify(d)) as Record<string, unknown>);
+  }
 
   private normalizeMotorState(state: unknown): 'ON' | 'OFF' | string {
     const s = String(state ?? '')
@@ -82,22 +87,17 @@ export class DevicesService {
   }
 
   async findAll() {
-    return this.deviceModel.find().lean();
+    const list = await this.deviceRepo.find({ order: { name: 'ASC' } });
+    return list.map((d) => this.leanDevice(d));
   }
 
   async getPublicStats() {
-    const devices = await this.deviceModel.find().lean();
+    const devices = await this.deviceRepo.find();
     const total = devices.length;
     const online = devices.filter((d) => d.status === 'ONLINE').length;
     const offline = devices.filter((d) => d.status === 'OFFLINE').length;
-    const totalWater = devices.reduce(
-      (sum, d) => sum + (d.totalLitres || 0),
-      0
-    );
-    const totalEnergy = devices.reduce(
-      (sum, d) => sum + (d.totalElectricity || 0),
-      0
-    );
+    const totalWater = devices.reduce((sum, d) => sum + (d.totalLitres || 0), 0);
+    const totalEnergy = devices.reduce((sum, d) => sum + (d.totalElectricity || 0), 0);
 
     return {
       total,
@@ -109,54 +109,54 @@ export class DevicesService {
   }
 
   async findOne(id: string) {
-    const device = await this.deviceModel.findById(id).lean();
+    const device = await this.deviceRepo.findOne({ where: { id } });
     if (!device) throw new NotFoundException('Device not found');
-    return device;
+    return this.leanDevice(device);
   }
 
   async getDeviceByName(name: string) {
-    const device = await this.deviceModel.findOne({ name }).lean();
-    return device;
+    const device = await this.deviceRepo.findOne({ where: { name } });
+    return device ? this.leanDevice(device) : null;
   }
 
   async create(dto: CreateDeviceDto, createdByUserId?: string) {
     const initialUserIds = dto.userIds ?? [];
-    // ensure creator user id is included if provided
     const userIds = createdByUserId
       ? Array.from(new Set([...initialUserIds, createdByUserId]))
       : initialUserIds;
 
-    const device = await this.deviceModel.create({
-      name: dto.name,
-      location: dto.location ?? 'Unknown',
-      status: dto.status ?? 'OFFLINE',
-      powerUsage: dto.powerUsage ?? 0,
-      userIds,
-      lastUpdated: new Date()
-    });
-    return { message: 'Device created successfully', device };
+    const device = await this.deviceRepo.save(
+      this.deviceRepo.create({
+        name: dto.name,
+        location: dto.location ?? 'Unknown',
+        status: dto.status ?? 'OFFLINE',
+        powerUsage: dto.powerUsage ?? 0,
+        userIds,
+        lastUpdated: new Date()
+      })
+    );
+    return { message: 'Device created successfully', device: this.leanDevice(device) };
   }
 
   async update(id: string, dto: UpdateDeviceDto) {
-    const updateData: any = { ...dto, lastUpdated: new Date() };
-    if (dto.userIds !== undefined) {
-      updateData.userIds = dto.userIds;
-    }
-    const device = await this.deviceModel
-      .findByIdAndUpdate(id, updateData, { new: true })
-      .lean();
+    const device = await this.deviceRepo.findOne({ where: { id } });
     if (!device) throw new NotFoundException('Device not found');
-    return { message: 'Device updated successfully', device };
+
+    Object.assign(device, { ...dto, lastUpdated: new Date() });
+    if (dto.userIds !== undefined) {
+      device.userIds = dto.userIds;
+    }
+    const saved = await this.deviceRepo.save(device);
+    return { message: 'Device updated successfully', device: this.leanDevice(saved) };
   }
 
   async remove(id: string) {
-    const res = await this.deviceModel.findByIdAndDelete(id).lean();
-    if (!res) throw new NotFoundException('Device not found');
+    const res = await this.deviceRepo.delete({ id });
+    if (!res.affected) throw new NotFoundException('Device not found');
     return { message: 'Device deleted successfully' };
   }
 
   async upsertSensorSnapshot(snapshot: SensorSnapshot) {
-    // deviceName majburiy bo'lishi kerak
     if (!snapshot.deviceName) {
       this.logger.warn('Sensor snapshot missing deviceName, skipping');
       return;
@@ -164,12 +164,12 @@ export class DevicesService {
 
     const name = snapshot.deviceName;
     const now = new Date();
-    const prev = await this.deviceModel.findOne({ name }).lean();
+    const prev = await this.deviceRepo.findOne({ where: { name } });
 
-    const update = {
+    const update: Partial<Device> = {
       name,
       location: snapshot.location ?? 'Remote node',
-      status: 'ONLINE' as DeviceStatus,
+      status: 'ONLINE',
       lastUpdated: now,
       waterDepth: snapshot.waterDepth ?? 0,
       height: snapshot.height ?? 0,
@@ -178,44 +178,45 @@ export class DevicesService {
       motorState: snapshot.motorState ?? 'OFF',
       timerActive: snapshot.timerActive ?? false,
       timerDuration:
-        snapshot.timerActive && snapshot.timerDuration
-          ? snapshot.timerDuration
-          : 0,
-      motorOnline: snapshot.motorOnline ?? false,
-      ultrasonic:
-        snapshot.ultrasonicMode !== undefined
-          ? Boolean(snapshot.ultrasonicMode)
-          : undefined,
-      activeMotor2:
-        snapshot.activeMotor2 !== undefined
-          ? Boolean(snapshot.activeMotor2)
-          : undefined
+        snapshot.timerActive && snapshot.timerDuration ? snapshot.timerDuration : 0,
+      motorOnline: snapshot.motorOnline ?? false
     };
 
-    const device = await this.deviceModel
-      .findOneAndUpdate(
-        { name },
-        {
-          $set: Object.fromEntries(
-            Object.entries(update).filter(([, v]) => v !== undefined)
-          )
-        },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      )
-      .lean();
+    if (snapshot.ultrasonicMode !== undefined) {
+      update.ultrasonic = Boolean(snapshot.ultrasonicMode);
+    }
+    if (snapshot.activeMotor2 !== undefined) {
+      update.activeMotor2 = Boolean(snapshot.activeMotor2);
+    }
 
-    // Push notifications based on ESP32 events (edge-triggered)
+    let device: Device;
+    if (!prev) {
+      device = this.deviceRepo.create({
+        ...update,
+        powerUsage: 0,
+        motorFault: false,
+        ultrasonic: update.ultrasonic ?? true,
+        activeMotor2: update.activeMotor2 ?? false,
+        userIds: [],
+        timerEndTime: null
+      } as Device);
+    } else {
+      Object.assign(prev, Object.fromEntries(Object.entries(update).filter(([, v]) => v !== undefined)));
+      device = prev;
+    }
+
+    device = await this.deviceRepo.save(device);
+
     try {
-      const prevMotor = this.normalizeMotorState((prev as any)?.motorState);
-      const nextMotor = this.normalizeMotorState((device as any)?.motorState);
-      const userIds = ((device as any)?.userIds ?? []).map(String);
-      const deviceId = (device as any)?._id?.toString?.();
-      const deviceName = String((device as any)?.name ?? name);
-      const ultrasonic = Boolean((device as any)?.ultrasonic); // true=AUTO, false=MANUAL
+      const prevMotor = this.normalizeMotorState(prev?.motorState);
+      const nextMotor = this.normalizeMotorState(device.motorState);
+      const userIds = (device.userIds ?? []).map(String);
+      const deviceId = device.id;
+      const deviceName = String(device.name ?? name);
+      const ultrasonic = Boolean(device.ultrasonic);
       const motorBy = String(snapshot.motorBy ?? '').toUpperCase();
 
       if (this.pushService && prev && userIds.length && deviceId) {
-        // 1) Manual mode motor on/off (ultrasonic=false + MANUAL_ON/OFF)
         if (!ultrasonic && (motorBy === 'MANUAL_ON' || motorBy === 'MANUAL_OFF')) {
           if (prevMotor !== nextMotor && (nextMotor === 'ON' || nextMotor === 'OFF')) {
             const msg = this.motorTitleAndBody({
@@ -227,12 +228,14 @@ export class DevicesService {
               userIds,
               title: msg.title,
               body: msg.body,
-              data: { deviceId, eventType: nextMotor === 'ON' ? 'MANUAL_MOTOR_ON' : 'MANUAL_MOTOR_OFF' }
+              data: {
+                deviceId,
+                eventType: nextMotor === 'ON' ? 'MANUAL_MOTOR_ON' : 'MANUAL_MOTOR_OFF'
+              }
             });
           }
         }
 
-        // 2) Sensor/auto mode motor on/off (ultrasonic=true + AUTO_LEVEL/_OFF)
         if (ultrasonic && (motorBy === 'AUTO_LEVEL' || motorBy === 'AUTO_LEVEL_OFF')) {
           if (prevMotor !== nextMotor && (nextMotor === 'ON' || nextMotor === 'OFF')) {
             const msg = this.motorTitleAndBody({
@@ -244,15 +247,17 @@ export class DevicesService {
               userIds,
               title: msg.title,
               body: msg.body,
-              data: { deviceId, eventType: nextMotor === 'ON' ? 'SENSOR_MOTOR_ON' : 'SENSOR_MOTOR_OFF' }
+              data: {
+                deviceId,
+                eventType: nextMotor === 'ON' ? 'SENSOR_MOTOR_ON' : 'SENSOR_MOTOR_OFF'
+              }
             });
           }
         }
 
-        // 3) Timer started (TIMER_START) => "timer o'rnatildi motor yoqildi"
         if (motorBy === 'TIMER_START') {
-          const prevTimer = Boolean((prev as any)?.timerActive);
-          const nextTimer = Boolean((device as any)?.timerActive);
+          const prevTimer = Boolean(prev?.timerActive);
+          const nextTimer = Boolean(device.timerActive);
           if (!prevTimer && nextTimer) {
             await this.pushService.sendToUsers({
               userIds,
@@ -263,11 +268,10 @@ export class DevicesService {
           }
         }
 
-        // 4) Motor switched (if ESP32 sends activeMotor2)
-        if (snapshot.activeMotor2 !== undefined) {
-          const prevActive = Boolean((prev as any)?.activeMotor2);
-          const nextActive = Boolean((device as any)?.activeMotor2);
-          if (prev && prevActive !== nextActive) {
+        if (snapshot.activeMotor2 !== undefined && prev) {
+          const prevActive = Boolean(prev.activeMotor2);
+          const nextActive = Boolean(device.activeMotor2);
+          if (prevActive !== nextActive) {
             await this.pushService.sendToUsers({
               userIds,
               title: 'Motor almashtirildi',
@@ -285,36 +289,29 @@ export class DevicesService {
       );
     }
 
-    // Send device settings to ESP32 when it first connects (BOOT event)
-    // Check if this is a BOOT event by checking motorBy field
     if (device && this.mqttService && snapshot.deviceName) {
-      const deviceName = (device as any).name;
+      const deviceName = device.name;
       const isBootEvent = snapshot.motorBy === 'BOOT';
 
-      // Send settings on BOOT event
       if (isBootEvent) {
-        this.logger.log(
-          `BOOT event detected. Sending device settings to ESP32: ${deviceName}`
-        );
-        // Send current device settings to ESP32
+        this.logger.log(`BOOT event detected. Sending device settings to ESP32: ${deviceName}`);
         this.mqttService.publishDeviceSettings(deviceName, {
-          height: (device as any).height ?? 0,
-          activeMotor2: (device as any).activeMotor2 ?? false,
-          ultrasonic: (device as any).ultrasonic ?? true
+          height: device.height ?? 0,
+          activeMotor2: device.activeMotor2 ?? false,
+          ultrasonic: device.ultrasonic ?? true
         });
         this.logger.log(
-          `Settings sent: height=${(device as any).height ?? 0}, activeMotor2=${
-            (device as any).activeMotor2 ?? false
-          }, ultrasonic=${(device as any).ultrasonic ?? true}`
+          `Settings sent: height=${device.height ?? 0}, activeMotor2=${
+            device.activeMotor2 ?? false
+          }, ultrasonic=${device.ultrasonic ?? true}`
         );
       }
     }
 
-    // Emit real-time update via WebSocket
     if (device && this.devicesGateway) {
-      this.devicesGateway.emitDeviceUpdate(device as unknown as Device);
+      this.devicesGateway.emitDeviceUpdate(device);
       this.devicesGateway.emitDeviceStatus({
-        deviceId: (device as any)._id.toString(),
+        deviceId: device.id,
         status: 'ONLINE'
       });
     }
@@ -333,40 +330,43 @@ export class DevicesService {
     },
     deviceName?: string | null
   ) {
-    // deviceName ni aniqlash
-    const name = deviceName || (data as any)?.deviceName || 'ESP32Controller';
+    const name = deviceName || (data as { deviceName?: string }).deviceName || 'ESP32Controller';
     const normalized = data.status?.toLowerCase();
-    const deviceStatus: DeviceStatus =
-      normalized === 'offline' ? 'OFFLINE' : 'ONLINE';
+    const deviceStatus: DeviceStatus = normalized === 'offline' ? 'OFFLINE' : 'ONLINE';
 
-    const prev = await this.deviceModel.findOne({ name }).lean();
+    const existing = await this.deviceRepo.findOne({ where: { name } });
 
-    const updateFields: any = {
+    const updateFields: Partial<Device> = {
       status: deviceStatus,
       lastUpdated: new Date()
     };
 
     if (data.waterDepth !== undefined) updateFields.waterDepth = data.waterDepth;
     if (data.totalLitres !== undefined) updateFields.totalLitres = data.totalLitres;
-    if (data.totalElectricity !== undefined)
-      updateFields.totalElectricity = data.totalElectricity;
-    if (data.ultrasonicMode !== undefined)
-      updateFields.ultrasonic = data.ultrasonicMode;
+    if (data.totalElectricity !== undefined) updateFields.totalElectricity = data.totalElectricity;
+    if (data.ultrasonicMode !== undefined) updateFields.ultrasonic = data.ultrasonicMode;
     if (data.activeMotor2 !== undefined) updateFields.activeMotor2 = data.activeMotor2;
     if (data.height !== undefined) updateFields.height = data.height;
     if (data.motorState !== undefined) updateFields.motorState = data.motorState;
 
-    const device = await this.deviceModel
-      .findOneAndUpdate(
-        { name },
-        { $set: updateFields },
-        { upsert: true, setDefaultsOnInsert: true, new: true }
-      )
-      .lean();
+    let device: Device;
+    if (!existing) {
+      device = this.deviceRepo.create({
+        name,
+        location: 'Unknown',
+        userIds: [],
+        timerEndTime: null,
+        ...updateFields
+      } as Device);
+    } else {
+      Object.assign(existing, updateFields);
+      device = existing;
+    }
 
-    // Emit status change via WebSocket (with metrics)
+    device = await this.deviceRepo.save(device);
+
     if (device && this.devicesGateway) {
-      const deviceId = (device as any)._id?.toString();
+      const deviceId = device.id;
       if (deviceId) {
         this.devicesGateway.emitDeviceStatus({
           deviceId,
@@ -379,69 +379,63 @@ export class DevicesService {
           height: data.height,
           motorState: data.motorState
         });
-        this.devicesGateway.emitDeviceUpdate(device as unknown as Device);
+        this.devicesGateway.emitDeviceUpdate(device);
       }
     }
 
     this.logger.debug(`Updated status for device: ${name} -> ${deviceStatus}`);
   }
 
-  async assignUsers(
-    deviceId: string,
-    userIds: string[],
-    requestingUserId?: string
-  ) {
-    const device = await this.deviceModel.findById(deviceId);
+  async assignUsers(deviceId: string, userIds: string[], requestingUserId?: string) {
+    const device = await this.deviceRepo.findOne({ where: { id: deviceId } });
     if (!device) {
       throw new NotFoundException('Device not found');
     }
 
-    // If requestingUserId is provided and user is not admin, check if user has access to this device
-    if (requestingUserId && !device.userIds.includes(requestingUserId)) {
+    const assigned = device.userIds ?? [];
+    if (requestingUserId && !assigned.includes(requestingUserId)) {
       throw new NotFoundException('Device not found or access denied');
     }
 
-    // Remove duplicates and add new user IDs
-    const uniqueUserIds = [...new Set([...device.userIds, ...userIds])];
-    device.userIds = uniqueUserIds;
-    await device.save();
-    return { message: 'Users assigned successfully', device };
+    device.userIds = [...new Set([...assigned, ...userIds])];
+    await this.deviceRepo.save(device);
+    return { message: 'Users assigned successfully', device: this.leanDevice(device) };
   }
 
   async unassignUsers(deviceId: string, userIds: string[]) {
-    const device = await this.deviceModel.findById(deviceId);
+    const device = await this.deviceRepo.findOne({ where: { id: deviceId } });
     if (!device) {
       throw new NotFoundException('Device not found');
     }
-    device.userIds = device.userIds.filter((id) => !userIds.includes(id));
-    await device.save();
-    return { message: 'Users unassigned successfully', device };
+    const assigned = device.userIds ?? [];
+    device.userIds = assigned.filter((id) => !userIds.includes(id));
+    await this.deviceRepo.save(device);
+    return { message: 'Users unassigned successfully', device: this.leanDevice(device) };
   }
 
   async getUserDevices(userId: string) {
-    return this.deviceModel.find({ userIds: userId }).lean();
+    const list = await this.deviceRepo
+      .createQueryBuilder('d')
+      .where(':uid = ANY(d.userIds)', { uid: userId })
+      .getMany();
+    return list.map((d) => this.leanDevice(d));
   }
 
-  async sendCommand(
-    deviceId: string,
-    command: DeviceCommandDto,
-    requestingUserId?: string
-  ) {
-    const device = await this.deviceModel.findById(deviceId);
+  async sendCommand(deviceId: string, command: DeviceCommandDto, requestingUserId?: string) {
+    const device = await this.deviceRepo.findOne({ where: { id: deviceId } });
     if (!device) {
       throw new NotFoundException('Device not found');
     }
 
-    // Check access for non-admin users
-    if (requestingUserId && !device.userIds.includes(requestingUserId)) {
+    const assigned = device.userIds ?? [];
+    if (requestingUserId && !assigned.includes(requestingUserId)) {
       throw new ForbiddenException('Access denied to this device');
     }
 
-    const updateData: any = {
+    const updateData: Partial<Device> = {
       lastUpdated: new Date()
     };
 
-    // Motor command
     if (command.motor !== undefined) {
       updateData.motorState = command.motor;
       if (command.motor === 'OFF') {
@@ -449,50 +443,41 @@ export class DevicesService {
       }
     }
 
-    // Height command
     if (command.height !== undefined) {
       updateData.height = command.height;
     }
 
-    // Timer command
     if (command.timer !== undefined) {
       const timerSeconds = command.timer;
       updateData.timerActive = true;
       updateData.timerDuration = timerSeconds;
-      updateData.timerEndTime = new Date(Date.now() + timerSeconds * 1000); // Calculate end time
+      updateData.timerEndTime = new Date(Date.now() + timerSeconds * 1000);
       updateData.motorState = 'ON';
     }
 
-    // Switch motor command
     if (command.switchMotor !== undefined) {
       updateData.activeMotor2 = command.switchMotor;
     }
 
-    // Ultrasonic mode command
     if (command.ultrasonic !== undefined) {
       updateData.ultrasonic = command.ultrasonic;
     }
 
-    const updatedDevice = await this.deviceModel
-      .findByIdAndUpdate(deviceId, { $set: updateData }, { new: true })
-      .lean();
+    const prevMotorForPush = this.normalizeMotorState(device.motorState);
+    const prevActiveMotor2 = Boolean(device.activeMotor2);
 
-    if (!updatedDevice) {
-      throw new NotFoundException('Device not found');
-    }
+    Object.assign(device, updateData);
+    const updatedDevice = await this.deviceRepo.save(device);
 
-    // Push: command-based events (edge-triggered)
     try {
-      const userIds = ((updatedDevice as any)?.userIds ?? []).map(String);
-      const deviceIdStr = (updatedDevice as any)?._id?.toString?.();
-      const deviceName = String((updatedDevice as any)?.name ?? 'Device');
-      const ultrasonic = Boolean((updatedDevice as any)?.ultrasonic); // true=AUTO, false=MANUAL
+      const userIds = (updatedDevice.userIds ?? []).map(String);
+      const deviceIdStr = updatedDevice.id;
+      const deviceName = String(updatedDevice.name ?? 'Device');
+      const ultrasonic = Boolean(updatedDevice.ultrasonic);
       if (this.pushService && userIds.length && deviceIdStr) {
-        // Manual mode (ultrasonic=false): motor on/off
         if (command.motor !== undefined && !ultrasonic) {
-          const prevMotor = this.normalizeMotorState((device as any)?.motorState);
           const nextMotor = this.normalizeMotorState(command.motor);
-          if (prevMotor !== nextMotor && (nextMotor === 'ON' || nextMotor === 'OFF')) {
+          if (prevMotorForPush !== nextMotor && (nextMotor === 'ON' || nextMotor === 'OFF')) {
             const msg = this.motorTitleAndBody({
               deviceName,
               mode: 'manual',
@@ -510,7 +495,6 @@ export class DevicesService {
           }
         }
 
-        // Timer set: "timer o'rnatildi motor yoqildi"
         if (command.timer !== undefined) {
           await this.pushService.sendToUsers({
             userIds,
@@ -521,9 +505,8 @@ export class DevicesService {
         }
 
         if (command.switchMotor !== undefined) {
-          const prevActive = Boolean((device as any)?.activeMotor2);
           const nextActive = Boolean(command.switchMotor);
-          if (prevActive !== nextActive) {
+          if (prevActiveMotor2 !== nextActive) {
             await this.pushService.sendToUsers({
               userIds,
               title: 'Motor almashtirildi',
@@ -539,21 +522,13 @@ export class DevicesService {
       }
     } catch (e) {
       this.logger.warn(
-        `Push send failed (sendCommand): ${
-          e instanceof Error ? e.message : String(e)
-        }`
+        `Push send failed (sendCommand): ${e instanceof Error ? e.message : String(e)}`
       );
     }
 
-    // Send command to ESP32 via MQTT with device ID in topic
     try {
       if (this.mqttService && updatedDevice) {
-        const updatedDeviceId =
-          (updatedDevice as any)._id?.toString() || deviceId;
-        const deviceName = (updatedDevice as any).name || 'ESP32Controller';
-
-        // Use device name as identifier (ESP32 can be configured with this)
-        const deviceIdentifier = deviceName;
+        const deviceIdentifier = updatedDevice.name || 'ESP32Controller';
 
         if (command.motor !== undefined) {
           this.mqttService.publishMotor(deviceIdentifier, command.motor);
@@ -564,88 +539,69 @@ export class DevicesService {
         if (command.timer !== undefined) {
           this.mqttService.publishTimer(deviceIdentifier, command.timer);
         }
-        // Motor switching - publish to switch motor topic
         if (command.switchMotor !== undefined) {
-          this.mqttService.publishMotorSwitch(
-            deviceIdentifier,
-            command.switchMotor ? '2' : '1'
-          );
+          this.mqttService.publishMotorSwitch(deviceIdentifier, command.switchMotor ? '2' : '1');
         }
-        // Ultrasonic mode - publish to ultrasonic topic
         if (command.ultrasonic !== undefined) {
-          this.mqttService.publishUltrasonic(
-            deviceIdentifier,
-            command.ultrasonic
-          );
+          this.mqttService.publishUltrasonic(deviceIdentifier, command.ultrasonic);
         }
       }
     } catch (error) {
-      // Log error but don't fail the request
       console.error('Failed to send MQTT command:', error);
     }
 
-    // Emit real-time update via WebSocket
     if (this.devicesGateway) {
-      this.devicesGateway.emitDeviceUpdate(updatedDevice as unknown as Device);
+      this.devicesGateway.emitDeviceUpdate(updatedDevice);
     }
 
-    return { message: 'Command sent successfully', device: updatedDevice };
+    return {
+      message: 'Command sent successfully',
+      device: this.leanDevice(updatedDevice)
+    };
   }
 
-  // Cron job: Check for offline devices every 30 seconds
-  @Cron('*/30 * * * * *') // Every 30 seconds
+  @Cron('*/30 * * * * *')
   async checkDeviceStatus() {
     const now = new Date();
-    const offlineThreshold = new Date(now.getTime() - 60000); // 1 minute ago
+    const offlineThreshold = new Date(now.getTime() - 60000);
 
-    // Find devices that haven't updated in the last minute
-    const offlineDevices = await this.deviceModel
-      .find({
+    const offlineDevices = await this.deviceRepo.find({
+      where: {
         status: 'ONLINE',
-        lastUpdated: { $lt: offlineThreshold }
-      })
-      .lean();
+        lastUpdated: LessThan(offlineThreshold)
+      }
+    });
 
     for (const device of offlineDevices) {
       try {
-        await this.deviceModel.findByIdAndUpdate(device._id, {
-          $set: {
-            status: 'OFFLINE' as DeviceStatus,
-            lastUpdated: new Date()
-          }
-        });
+        device.status = 'OFFLINE';
+        device.lastUpdated = new Date();
+        await this.deviceRepo.save(device);
 
-        // Emit status change via WebSocket
         if (this.devicesGateway) {
-          const deviceId = (device as any)._id.toString();
           this.devicesGateway.emitDeviceStatus({
-            deviceId,
+            deviceId: device.id,
             status: 'OFFLINE'
           });
         }
       } catch (error) {
-        this.logger.error(
-          `Failed to mark device ${device._id} as offline`,
-          error
-        );
+        this.logger.error(`Failed to mark device ${device.id} as offline`, error);
       }
     }
   }
 
-  // Cron job: Save hourly energy consumption data
-  @Cron('0 * * * *') // Every hour at minute 0
+  @Cron('0 * * * *')
   async saveHourlyEnergyConsumption() {
     try {
-      const devices = await this.deviceModel.find({ status: 'ONLINE' }).lean();
+      const devices = await this.deviceRepo.find({ where: { status: 'ONLINE' } });
 
       for (const device of devices) {
-        const deviceId = (device as any)._id.toString();
+        const dId = device.id;
         const userIds = device.userIds || [];
 
-        // Save consumption data for each user assigned to this device
         for (const userId of userIds) {
           if (this.reportsService) {
-            await this.reportsService.saveHourlyConsumption(deviceId, userId, {
+            await this.reportsService.saveHourlyConsumption(dId, userId, {
               energyUsed: device.totalElectricity ?? 0,
               waterUsed: device.totalLitres ?? 0,
               motorState: device.motorState ?? 'OFF',
@@ -655,65 +611,45 @@ export class DevicesService {
         }
       }
 
-      this.logger.log(
-        `Saved hourly energy consumption data for ${devices.length} devices`
-      );
+      this.logger.log(`Saved hourly energy consumption data for ${devices.length} devices`);
     } catch (error) {
       this.logger.error('Failed to save hourly energy consumption', error);
     }
   }
 
-  // Cron job: Check timer every second
   @Cron(CronExpression.EVERY_SECOND)
   async checkTimers() {
     const now = new Date();
-    const devicesWithExpiredTimers = await this.deviceModel
-      .find({
+    const devicesWithExpiredTimers = await this.deviceRepo.find({
+      where: {
         timerActive: true,
-        timerEndTime: { $lte: now }
-      })
-      .lean();
+        timerEndTime: LessThanOrEqual(now)
+      }
+    });
 
-    for (const device of devicesWithExpiredTimers) {
+    for (const dev of devicesWithExpiredTimers) {
       try {
-        // Update device: turn off timer and motor
-        const updatedDevice = await this.deviceModel
-          .findByIdAndUpdate(
-            device._id,
-            {
-              $set: {
-                timerActive: false,
-                motorState: 'OFF',
-                timerDuration: 0,
-                timerEndTime: null,
-                lastUpdated: new Date()
-              }
-            },
-            { new: true }
-          )
-          .lean();
+        dev.timerActive = false;
+        dev.motorState = 'OFF';
+        dev.timerDuration = 0;
+        dev.timerEndTime = null;
+        dev.lastUpdated = new Date();
+        const updatedDevice = await this.deviceRepo.save(dev);
 
-        // Send motor OFF command via MQTT
         if (this.mqttService) {
-          const deviceName = (device as any).name || 'ESP32Controller';
+          const deviceName = dev.name || 'ESP32Controller';
           this.mqttService.publishMotor(deviceName, 'OFF');
-          this.logger.log(
-            `Timer expired for device ${device._id}, motor turned OFF`
-          );
+          this.logger.log(`Timer expired for device ${dev.id}, motor turned OFF`);
         }
 
-        // Emit real-time update via WebSocket
         if (updatedDevice && this.devicesGateway) {
-          this.devicesGateway.emitDeviceUpdate(
-            updatedDevice as unknown as Device
-          );
+          this.devicesGateway.emitDeviceUpdate(updatedDevice);
         }
 
-        // Push: timer ended => motor OFF
         try {
-          const userIds = ((updatedDevice as any)?.userIds ?? []).map(String);
-          const deviceId = (updatedDevice as any)?._id?.toString?.();
-          const deviceName = String((updatedDevice as any)?.name ?? 'Device');
+          const userIds = (updatedDevice.userIds ?? []).map(String);
+          const deviceId = updatedDevice.id;
+          const deviceName = String(updatedDevice.name ?? 'Device');
           if (this.pushService && userIds.length && deviceId) {
             await this.pushService.sendToUsers({
               userIds,
@@ -724,16 +660,11 @@ export class DevicesService {
           }
         } catch (e) {
           this.logger.warn(
-            `Push send failed (checkTimers): ${
-              e instanceof Error ? e.message : String(e)
-            }`
+            `Push send failed (checkTimers): ${e instanceof Error ? e.message : String(e)}`
           );
         }
       } catch (error) {
-        this.logger.error(
-          `Failed to process expired timer for device ${device._id}`,
-          error
-        );
+        this.logger.error(`Failed to process expired timer for device ${dev.id}`, error);
       }
     }
   }

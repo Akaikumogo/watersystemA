@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum, IsNotEmpty } from 'class-validator';
-import { Language } from '../schemas/user.schema';
+import { Language } from '../schemas/user.entity';
 
 export class UpdatePreferencesDto {
 	@ApiProperty({

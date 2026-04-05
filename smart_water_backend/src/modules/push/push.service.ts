@@ -1,11 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, In } from 'typeorm';
 import * as fs from 'fs';
 import * as nodePath from 'path';
 import * as admin from 'firebase-admin';
-import { PushToken } from './schemas/push-token.schema';
+import { PushToken } from './schemas/push-token.entity';
 
 export type PushSendInput = {
   userIds: string[];
@@ -21,7 +21,7 @@ export class PushService {
 
   constructor(
     private readonly config: ConfigService,
-    @InjectModel(PushToken.name) private readonly pushTokenModel: Model<PushToken>
+    @InjectRepository(PushToken) private readonly pushTokenRepo: Repository<PushToken>
   ) {}
 
   async registerToken(input: {
@@ -31,28 +31,23 @@ export class PushService {
     deviceId?: string;
   }) {
     const now = new Date();
-    await this.pushTokenModel
-      .findOneAndUpdate(
-        { token: input.token },
-        {
-          $set: {
-            token: input.token,
-            platform: input.platform,
-            userId: input.userId,
-            deviceId: input.deviceId,
-            enabled: true,
-            lastSeenAt: now
-          }
-        },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
-      )
-      .lean();
+    await this.pushTokenRepo.upsert(
+      {
+        token: input.token,
+        platform: input.platform,
+        userId: input.userId,
+        deviceId: input.deviceId ?? null,
+        enabled: true,
+        lastSeenAt: now
+      } as PushToken,
+      { conflictPaths: ['token'] }
+    );
 
     return { message: 'Push token registered' };
   }
 
   async unregisterToken(input: { userId: string; token: string }) {
-    await this.pushTokenModel.deleteOne({ token: input.token, userId: input.userId });
+    await this.pushTokenRepo.delete({ token: input.token, userId: input.userId });
     return { message: 'Push token unregistered' };
   }
 
@@ -68,7 +63,6 @@ export class PushService {
       return { ok: false, sent: 0, reason: 'fcm_not_configured' };
     }
 
-    // Send as a "notification + data" message so Android can deliver even when app is killed.
     const res = await messaging.sendEachForMulticast({
       tokens,
       notification: { title: input.title, body: input.body },
@@ -76,7 +70,6 @@ export class PushService {
       android: { priority: 'high' }
     });
 
-    // Disable invalid tokens to keep DB clean
     const invalidTokens: string[] = [];
     res.responses.forEach((r, idx) => {
       if (r.success) return;
@@ -89,21 +82,18 @@ export class PushService {
       }
     });
     if (invalidTokens.length) {
-      await this.pushTokenModel.updateMany(
-        { token: { $in: invalidTokens } },
-        { $set: { enabled: false } }
-      );
+      await this.pushTokenRepo.update({ token: In(invalidTokens) }, { enabled: false });
     }
 
     return { ok: true, sent: res.successCount, failed: res.failureCount };
   }
 
   private async getEnabledTokens(userIds: string[]) {
-    const rows = await this.pushTokenModel
-      .find({ userId: { $in: userIds }, enabled: true })
-      .select({ token: 1 })
-      .lean();
-    return [...new Set(rows.map((r: any) => String(r.token)).filter(Boolean))];
+    const rows = await this.pushTokenRepo.find({
+      where: { userId: In(userIds), enabled: true },
+      select: ['token']
+    });
+    return [...new Set(rows.map((r) => String(r.token)).filter(Boolean))];
   }
 
   private getMessagingOrNull() {
@@ -138,7 +128,6 @@ export class PushService {
         return null;
       }
     } else {
-      // No env configuration: try repo-local files (static setup)
       const candidates = [
         nodePath.join(process.cwd(), 'firebase-service-account.json'),
         nodePath.join(process.cwd(), 'service-account.json')
@@ -173,7 +162,6 @@ export class PushService {
       });
       return this.firebaseApp;
     } catch (e) {
-      // If hot-reload initializes twice, reuse default app
       try {
         this.firebaseApp = admin.app();
         return this.firebaseApp;
@@ -184,5 +172,3 @@ export class PushService {
     }
   }
 }
-
-

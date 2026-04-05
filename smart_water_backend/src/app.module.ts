@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { MongooseModule } from '@nestjs/mongoose';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './modules/auth/auth.module';
 import { DevicesModule } from './modules/devices/devices.module';
@@ -16,9 +16,13 @@ import { PushModule } from './modules/push/push.module';
       isGlobal: true
     }),
     ScheduleModule.forRoot(),
-    MongooseModule.forRootAsync({
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
-        uri: config.get<string>('MONGODB_URI')
+        type: 'postgres',
+        url: config.get<string>('DATABASE_URL'),
+        autoLoadEntities: true,
+        synchronize: config.get<string>('NODE_ENV') !== 'production'
       }),
       inject: [ConfigService]
     }),

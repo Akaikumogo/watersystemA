@@ -9,7 +9,7 @@ import {
   IsBoolean,
   Min
 } from 'class-validator';
-import { DeviceStatus } from '../schemas/device.schema';
+import { DeviceStatus } from '../schemas/device.entity';
 
 export class UpdateDeviceDto {
   @ApiPropertyOptional({

@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsNotEmpty, IsEnum, IsOptional, IsNumber, IsArray, IsMongoId, Min, IsBoolean, MinLength, MaxLength, Matches } from 'class-validator';
-import { DeviceStatus } from '../schemas/device.schema';
+import { DeviceStatus } from '../schemas/device.entity';
 
 export class CreateDeviceDto {
 	@ApiProperty({

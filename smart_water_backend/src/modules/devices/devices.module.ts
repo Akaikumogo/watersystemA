@@ -1,8 +1,8 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { Device, DeviceSchema } from './schemas/device.schema';
+import { Device } from './schemas/device.entity';
 import { DevicesService } from './devices.service';
 import { DevicesController } from './devices.controller';
 import { DevicesGateway } from './devices.gateway';
@@ -12,7 +12,7 @@ import { PushModule } from '../push/push.module';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: Device.name, schema: DeviceSchema }]),
+    TypeOrmModule.forFeature([Device]),
     ConfigModule,
     JwtModule.registerAsync({
       useFactory: (config: ConfigService) => ({

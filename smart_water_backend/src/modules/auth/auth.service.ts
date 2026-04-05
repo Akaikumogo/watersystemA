@@ -6,20 +6,21 @@ import {
   Inject,
   forwardRef
 } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { User } from './schemas/user.schema';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { User } from './schemas/user.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { DevicesService } from '../devices/devices.service';
 import { MqttService } from '../mqtt/mqtt.service';
+import { toApiDoc } from '../../common/utils/mongo-compat';
 
 @Injectable()
 export class AuthService {
   constructor(
-    @InjectModel(User.name) private readonly userModel: Model<User>,
+    @InjectRepository(User) private readonly userRepo: Repository<User>,
     private readonly jwtService: JwtService,
     @Inject(forwardRef(() => DevicesService))
     private readonly devicesService?: DevicesService,
@@ -31,21 +32,23 @@ export class AuthService {
     if (requesterRole !== 'ADMIN') {
       throw new ForbiddenException('Only admin can create users');
     }
-    const existing = await this.userModel
-      .findOne({ username: dto.username })
-      .lean();
+    const existing = await this.userRepo.findOne({
+      where: { username: dto.username }
+    });
     if (existing) {
       throw new ConflictException('Username already exists');
     }
     const hashed = await bcrypt.hash(dto.password, 10);
-    const user = await this.userModel.create({
-      username: dto.username,
-      password: hashed,
-      role: dto.role ?? 'USER'
-    });
+    const user = await this.userRepo.save(
+      this.userRepo.create({
+        username: dto.username,
+        password: hashed,
+        role: dto.role ?? 'USER'
+      })
+    );
     return {
       message: 'User created successfully',
-      userId: user?._id?.toString()
+      userId: user.id
     };
   }
 
@@ -53,7 +56,7 @@ export class AuthService {
     if (!password) {
       throw new UnauthorizedException('Password is required');
     }
-    const user = await this.userModel.findOne({ username });
+    const user = await this.userRepo.findOne({ where: { username } });
     if (!user || !user.password) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -65,12 +68,10 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    // Trim username to handle whitespace issues
     const trimmedUsername = dto.username.trim();
-    
-    // Find user by exact username match
-    const user = await this.userModel.findOne({ 
-      username: trimmedUsername
+
+    const user = await this.userRepo.findOne({
+      where: { username: trimmedUsername }
     });
 
     if (!user) {
@@ -87,84 +88,81 @@ export class AuthService {
     }
 
     const payload = {
-      sub: String(user._id),
+      sub: String(user.id),
       username: user.username,
       role: user.role
     };
 
-    const userObj = user.toObject() as any;
-    delete userObj.password;
-
+    const { password: _p, ...rest } = user;
     return {
       access_token: this.jwtService.sign(payload),
-      user: userObj
+      user: toApiDoc(rest as unknown as Record<string, unknown>)
     };
   }
 
   async registerClient(dto: RegisterDto) {
-    const existing = await this.userModel
-      .findOne({ username: dto.username })
-      .lean();
+    const existing = await this.userRepo.findOne({
+      where: { username: dto.username }
+    });
     if (existing) {
       throw new ConflictException('Username already exists');
     }
     const hashed = await bcrypt.hash(dto.password, 10);
-    const user = await this.userModel.create({
-      username: dto.username,
-      password: hashed,
-      role: 'USER'
-    });
+    const user = await this.userRepo.save(
+      this.userRepo.create({
+        username: dto.username,
+        password: hashed,
+        role: 'USER'
+      })
+    );
 
     return {
       message: 'User created successfully',
-      userId: user._id as unknown as string
+      userId: user.id
     };
   }
 
   async getCurrentUser(userId: string) {
-    const user = await this.userModel
-      .findById(userId)
-      .select('-password')
-      .lean();
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      select: ['id', 'username', 'role', 'language', 'createdAt', 'updatedAt']
+    });
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
-    // Ensure language field exists (for existing users)
     if (!user.language) {
-      await this.userModel.findByIdAndUpdate(userId, { language: 'uz' });
+      await this.userRepo.update({ id: userId }, { language: 'uz' });
       user.language = 'uz';
     }
-    return user;
+    return toApiDoc(user as unknown as Record<string, unknown>);
   }
 
   async updateLanguage(userId: string, language: 'uz' | 'en' | 'ru') {
-    const user = await this.userModel.findByIdAndUpdate(
-      userId,
-      { language },
-      { new: true }
-    ).select('-password').lean();
-    
+    await this.userRepo.update({ id: userId }, { language });
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      select: ['id', 'username', 'role', 'language', 'createdAt', 'updatedAt']
+    });
+
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
 
-    // Send language to all user devices via MQTT
     if (this.devicesService && this.mqttService) {
       try {
         const userDevices = await this.devicesService.getUserDevices(userId);
         for (const device of userDevices) {
-          const deviceId = (device as any)._id?.toString();
-          const deviceName = (device as any).name || 'ESP32Controller';
+          const deviceId = (device as { id?: string }).id;
+          const deviceName = (device as { name?: string }).name || 'ESP32Controller';
           if (deviceId && deviceName) {
             this.mqttService.publishLanguage(deviceName, language);
           }
         }
       } catch (error) {
-        // Log error but don't fail the request
         console.error('Failed to send language to devices:', error);
       }
     }
 
-    return user;
+    return toApiDoc(user as unknown as Record<string, unknown>);
   }
 }

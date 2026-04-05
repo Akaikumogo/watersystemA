@@ -3,75 +3,77 @@ import {
   NotFoundException,
   Logger
 } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Contact } from './schemas/contact.schema';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Contact } from './schemas/contact.entity';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
+import { toApiDoc } from '../../common/utils/mongo-compat';
 
 @Injectable()
 export class ContactsService {
   private readonly logger = new Logger(ContactsService.name);
 
   constructor(
-    @InjectModel(Contact.name) private readonly contactModel: Model<Contact>
+    @InjectRepository(Contact) private readonly contactRepo: Repository<Contact>
   ) {}
 
   async create(dto: CreateContactDto) {
-    const contact = await this.contactModel.create({
-      name: dto.name,
-      email: dto.email,
-      message: dto.message,
-      read: false
-    });
-    this.logger.log(`New contact message created: ${contact._id}`);
-    return { message: 'Contact message created successfully', contact };
+    const contact = await this.contactRepo.save(
+      this.contactRepo.create({
+        name: dto.name,
+        email: dto.email,
+        message: dto.message,
+        read: false
+      })
+    );
+    this.logger.log(`New contact message created: ${contact.id}`);
+    return {
+      message: 'Contact message created successfully',
+      contact: toApiDoc(contact as unknown as Record<string, unknown>)
+    };
   }
 
   async findAll() {
-    const contacts = await this.contactModel
-      .find()
-      .sort({ createdAt: -1 })
-      .lean();
-    const total = contacts.length;
-    const unread = contacts.filter(c => !c.read).length;
-    return { contacts, total, unread };
+    const contacts = await this.contactRepo.find({
+      order: { createdAt: 'DESC' }
+    });
+    const plain = contacts.map((c) => toApiDoc(c as unknown as Record<string, unknown>));
+    const total = plain.length;
+    const unread = plain.filter((c) => !c.read).length;
+    return { contacts: plain, total, unread };
   }
 
   async findOne(id: string) {
-    const contact = await this.contactModel.findById(id).lean();
+    const contact = await this.contactRepo.findOne({ where: { id } });
     if (!contact) {
       throw new NotFoundException('Contact message not found');
     }
-    return contact;
+    return toApiDoc(contact as unknown as Record<string, unknown>);
   }
 
   async update(id: string, dto: UpdateContactDto) {
-    const updateData: any = {};
-    
-    if (dto.read !== undefined) {
-      updateData.read = dto.read;
-      if (dto.read) {
-        updateData.readAt = new Date();
-      } else {
-        updateData.readAt = null;
-      }
-    }
-
-    const contact = await this.contactModel
-      .findByIdAndUpdate(id, updateData, { new: true })
-      .lean();
-    
+    const contact = await this.contactRepo.findOne({ where: { id } });
     if (!contact) {
       throw new NotFoundException('Contact message not found');
     }
-    
-    return { message: 'Contact message updated successfully', contact };
+
+    if (dto.read !== undefined) {
+      contact.read = dto.read;
+      contact.readAt = dto.read ? new Date() : null;
+    }
+
+    const saved = await this.contactRepo.save(contact);
+
+    return {
+      message: 'Contact message updated successfully',
+      contact: toApiDoc(saved as unknown as Record<string, unknown>)
+    };
   }
 
   async remove(id: string) {
-    const contact = await this.contactModel.findByIdAndDelete(id).lean();
-    if (!contact) {
+    const res = await this.contactRepo.delete({ id });
+    if (!res.affected) {
       throw new NotFoundException('Contact message not found');
     }
     this.logger.log(`Contact message deleted: ${id}`);
@@ -86,4 +88,3 @@ export class ContactsService {
     return this.update(id, { read: false });
   }
 }
-

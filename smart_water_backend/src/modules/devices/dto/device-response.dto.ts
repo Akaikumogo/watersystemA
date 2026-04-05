@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { DeviceStatus } from '../schemas/device.schema';
+import { DeviceStatus } from '../schemas/device.entity';
 
 export class DeviceResponseDto {
 	@ApiProperty({

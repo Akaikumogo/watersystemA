@@ -1,40 +1,43 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getModelToken } from '@nestjs/mongoose';
-import { NotFoundException, ForbiddenException, forwardRef } from '@nestjs/common';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { NotFoundException } from '@nestjs/common';
 import { DevicesService } from './devices.service';
-import { Device } from './schemas/device.schema';
+import { Device } from './schemas/device.entity';
 import { CreateDeviceDto } from './dto/create-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
 import { MqttService } from '../mqtt/mqtt.service';
 import { DevicesGateway } from './devices.gateway';
 import { ReportsService } from '../reports/reports.service';
+import { PushService } from '../push/push.service';
 
 describe('DevicesService', () => {
   let service: DevicesService;
-  let deviceModel: any;
+  let deviceRepo: any;
 
-  const mockDeviceModel = {
+  const mockDeviceRepo = {
     find: jest.fn(),
-    findById: jest.fn(),
     findOne: jest.fn(),
-    create: jest.fn(),
-    findByIdAndUpdate: jest.fn(),
-    findByIdAndDelete: jest.fn(),
-    countDocuments: jest.fn(),
-    aggregate: jest.fn(),
+    save: jest.fn(),
+    create: jest.fn((x) => x),
+    delete: jest.fn(),
+    createQueryBuilder: jest.fn()
   };
 
   const mockMqttService = {
-    publishCommand: jest.fn(),
+    publishCommand: jest.fn()
   };
 
   const mockDevicesGateway = {
     emitDeviceUpdate: jest.fn(),
-    emitDeviceStatus: jest.fn(),
+    emitDeviceStatus: jest.fn()
   };
 
   const mockReportsService = {
-    generateDailyReport: jest.fn(),
+    saveHourlyConsumption: jest.fn()
+  };
+
+  const mockPushService = {
+    sendToUsers: jest.fn()
   };
 
   beforeEach(async () => {
@@ -42,26 +45,30 @@ describe('DevicesService', () => {
       providers: [
         DevicesService,
         {
-          provide: getModelToken(Device.name),
-          useValue: mockDeviceModel,
+          provide: getRepositoryToken(Device),
+          useValue: mockDeviceRepo
         },
         {
           provide: MqttService,
-          useValue: mockMqttService,
+          useValue: mockMqttService
         },
         {
           provide: DevicesGateway,
-          useValue: mockDevicesGateway,
+          useValue: mockDevicesGateway
         },
         {
           provide: ReportsService,
-          useValue: mockReportsService,
+          useValue: mockReportsService
         },
-      ],
+        {
+          provide: PushService,
+          useValue: mockPushService
+        }
+      ]
     }).compile();
 
     service = module.get<DevicesService>(DevicesService);
-    deviceModel = module.get(getModelToken(Device.name));
+    deviceRepo = module.get(getRepositoryToken(Device));
   });
 
   afterEach(() => {
@@ -72,39 +79,38 @@ describe('DevicesService', () => {
     it('should return an array of devices', async () => {
       const mockDevices = [
         {
-          _id: '507f1f77bcf86cd799439011',
+          id: '507f1f77-bc86-4cd7-9943-901100000001',
           name: 'Device 1',
           location: 'Location 1',
           status: 'ONLINE',
+          userIds: []
         },
         {
-          _id: '507f1f77bcf86cd799439012',
+          id: '507f1f77-bc86-4cd7-9943-901100000002',
           name: 'Device 2',
           location: 'Location 2',
           status: 'OFFLINE',
-        },
+          userIds: []
+        }
       ];
 
-      mockDeviceModel.find.mockReturnValue({
-        lean: jest.fn().mockResolvedValue(mockDevices),
-      });
+      mockDeviceRepo.find.mockResolvedValue(mockDevices);
 
       const result = await service.findAll();
 
-      expect(result).toEqual(mockDevices);
-      expect(mockDeviceModel.find).toHaveBeenCalled();
+      expect(result).toHaveLength(2);
+      expect(result[0]).toHaveProperty('_id', mockDevices[0].id);
+      expect(mockDeviceRepo.find).toHaveBeenCalled();
     });
   });
 
   describe('getPublicStats', () => {
     it('should return public statistics', async () => {
-      mockDeviceModel.find.mockReturnValue({
-        lean: jest.fn().mockResolvedValue([
-          { status: 'ONLINE', totalLitres: 100, totalElectricity: 50 },
-          { status: 'ONLINE', totalLitres: 200, totalElectricity: 100 },
-          { status: 'OFFLINE', totalLitres: 50, totalElectricity: 25 },
-        ]),
-      });
+      mockDeviceRepo.find.mockResolvedValue([
+        { status: 'ONLINE', totalLitres: 100, totalElectricity: 50 },
+        { status: 'ONLINE', totalLitres: 200, totalElectricity: 100 },
+        { status: 'OFFLINE', totalLitres: 50, totalElectricity: 25 }
+      ]);
 
       const result = await service.getPublicStats();
 
@@ -119,35 +125,27 @@ describe('DevicesService', () => {
   describe('findOne', () => {
     it('should return a device by id', async () => {
       const mockDevice = {
-        _id: '507f1f77bcf86cd799439011',
+        id: '507f1f77-bc86-4cd7-9943-901100000011',
         name: 'Device 1',
         location: 'Location 1',
         status: 'ONLINE',
-        toObject: () => ({
-          _id: '507f1f77bcf86cd799439011',
-          name: 'Device 1',
-          location: 'Location 1',
-          status: 'ONLINE',
-        }),
+        userIds: []
       };
 
-      mockDeviceModel.findById.mockReturnValue({
-        lean: jest.fn().mockResolvedValue(mockDevice),
-      });
+      mockDeviceRepo.findOne.mockResolvedValue(mockDevice);
 
-      const result = await service.findOne('507f1f77bcf86cd799439011');
+      const result = await service.findOne('507f1f77-bc86-4cd7-9943-901100000011');
 
       expect(result).toBeDefined();
       expect(result?.name).toBe('Device 1');
+      expect(result).toHaveProperty('_id', mockDevice.id);
     });
 
     it('should throw NotFoundException if device not found', async () => {
-      mockDeviceModel.findById.mockReturnValue({
-        lean: jest.fn().mockResolvedValue(null),
-      });
+      mockDeviceRepo.findOne.mockResolvedValue(null);
 
-      await expect(service.findOne('507f1f77bcf86cd799439011')).rejects.toThrow(
-        NotFoundException,
+      await expect(service.findOne('507f1f77-bc86-4cd7-9943-901100000011')).rejects.toThrow(
+        NotFoundException
       );
     });
   });
@@ -156,101 +154,73 @@ describe('DevicesService', () => {
     it('should create a new device', async () => {
       const createDeviceDto: CreateDeviceDto = {
         name: 'New Device',
-        location: 'New Location',
+        location: 'New Location'
       };
 
-      const mockDevice = {
-        _id: '507f1f77bcf86cd799439011',
+      const saved = {
+        id: '507f1f77-bc86-4cd7-9943-901100000011',
         ...createDeviceDto,
         status: 'OFFLINE',
-        toObject: () => ({
-          _id: '507f1f77bcf86cd799439011',
-          ...createDeviceDto,
-          status: 'OFFLINE',
-        }),
+        userIds: []
       };
 
-      mockDeviceModel.findOne.mockResolvedValue(null);
-      mockDeviceModel.create.mockResolvedValue(mockDevice);
+      mockDeviceRepo.save.mockResolvedValue(saved);
 
       const result = await service.create(createDeviceDto);
 
       expect(result).toBeDefined();
       expect(result.device.name).toBe('New Device');
-      expect(mockDeviceModel.create).toHaveBeenCalled();
+      expect(mockDeviceRepo.save).toHaveBeenCalled();
     });
   });
 
   describe('update', () => {
     it('should update a device', async () => {
       const updateDeviceDto: UpdateDeviceDto = {
-        name: 'Updated Device',
+        name: 'Updated Device'
       };
 
-      const mockDevice = {
-        _id: '507f1f77bcf86cd799439011',
-        name: 'Updated Device',
+      const existing = {
+        id: '507f1f77-bc86-4cd7-9943-901100000011',
+        name: 'Device 1',
         location: 'Location 1',
-        toObject: () => ({
-          _id: '507f1f77bcf86cd799439011',
-          name: 'Updated Device',
-          location: 'Location 1',
-        }),
+        userIds: []
       };
 
-      mockDeviceModel.findById.mockReturnValue({
-        lean: jest.fn().mockResolvedValue(mockDevice),
-      });
-      mockDeviceModel.findByIdAndUpdate.mockReturnValue({
-        lean: jest.fn().mockResolvedValue(mockDevice),
-      });
+      mockDeviceRepo.findOne.mockResolvedValue({ ...existing });
+      mockDeviceRepo.save.mockImplementation((d) => Promise.resolve(d));
 
-      const result = await service.update('507f1f77bcf86cd799439011', updateDeviceDto);
+      const result = await service.update('507f1f77-bc86-4cd7-9943-901100000011', updateDeviceDto);
 
       expect(result).toBeDefined();
       expect(result.device.name).toBe('Updated Device');
     });
 
     it('should throw NotFoundException if device not found', async () => {
-      mockDeviceModel.findById.mockReturnValue({
-        lean: jest.fn().mockResolvedValue(null),
-      });
-      mockDeviceModel.findByIdAndUpdate.mockReturnValue({
-        lean: jest.fn().mockResolvedValue(null),
-      });
+      mockDeviceRepo.findOne.mockResolvedValue(null);
 
-      await expect(
-        service.update('507f1f77bcf86cd799439011', {}),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.update('507f1f77-bc86-4cd7-9943-901100000011', {})).rejects.toThrow(
+        NotFoundException
+      );
     });
   });
 
   describe('remove', () => {
     it('should delete a device', async () => {
-      const mockDevice = {
-        _id: '507f1f77bcf86cd799439011',
-        name: 'Device 1',
-      };
+      mockDeviceRepo.delete.mockResolvedValue({ affected: 1 });
 
-      mockDeviceModel.findByIdAndDelete.mockReturnValue({
-        lean: jest.fn().mockResolvedValue(mockDevice),
-      });
-
-      const result = await service.remove('507f1f77bcf86cd799439011');
+      const result = await service.remove('507f1f77-bc86-4cd7-9943-901100000011');
 
       expect(result).toHaveProperty('message', 'Device deleted successfully');
-      expect(mockDeviceModel.findByIdAndDelete).toHaveBeenCalled();
+      expect(mockDeviceRepo.delete).toHaveBeenCalled();
     });
 
     it('should throw NotFoundException if device not found', async () => {
-      mockDeviceModel.findByIdAndDelete.mockReturnValue({
-        lean: jest.fn().mockResolvedValue(null),
-      });
+      mockDeviceRepo.delete.mockResolvedValue({ affected: 0 });
 
-      await expect(service.remove('507f1f77bcf86cd799439011')).rejects.toThrow(
-        NotFoundException,
+      await expect(service.remove('507f1f77-bc86-4cd7-9943-901100000011')).rejects.toThrow(
+        NotFoundException
       );
     });
   });
 });
-

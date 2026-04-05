@@ -1,6 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
-import { User, UserSchema } from './schemas/user.schema';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { User } from './schemas/user.entity';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtModule } from '@nestjs/jwt';
@@ -13,7 +13,7 @@ import { MqttModule } from '../mqtt/mqtt.module';
 @Module({
 	imports: [
 		ConfigModule,
-		MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
+		TypeOrmModule.forFeature([User]),
 		JwtModule.registerAsync({
 			useFactory: (config: ConfigService) => ({
 				secret: config.get<string>('JWT_SECRET'),
@@ -26,8 +26,6 @@ import { MqttModule } from '../mqtt/mqtt.module';
 	],
 	controllers: [AuthController],
 	providers: [AuthService, JwtStrategy, AdminSeedService],
-	exports: [MongooseModule, AuthService]
+	exports: [TypeOrmModule, AuthService]
 })
 export class AuthModule {}
-
-

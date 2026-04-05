@@ -31,11 +31,11 @@ describe('AppController (e2e)', () => {
       .get('/api/v1/devices/stats')
       .expect(200)
       .expect((res) => {
-        expect(res.body).toHaveProperty('totalDevices');
-        expect(res.body).toHaveProperty('onlineDevices');
-        expect(res.body).toHaveProperty('offlineDevices');
-        expect(res.body).toHaveProperty('totalWaterLitres');
-        expect(res.body).toHaveProperty('totalElectricityKwh');
+        expect(res.body).toHaveProperty('total');
+        expect(res.body).toHaveProperty('online');
+        expect(res.body).toHaveProperty('offline');
+        expect(res.body).toHaveProperty('totalWater');
+        expect(res.body).toHaveProperty('totalEnergy');
       });
   });
 

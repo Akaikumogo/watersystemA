@@ -10,7 +10,7 @@ import { Server, Socket } from 'socket.io';
 import { Logger, UseGuards } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import type { Device } from './schemas/device.schema';
+import type { Device } from './schemas/device.entity';
 
 @WebSocketGateway({
   cors: {
@@ -68,7 +68,7 @@ export class DevicesGateway implements OnGatewayConnection, OnGatewayDisconnect 
   // Emit device update to all connected clients
   emitDeviceUpdate(device: Device) {
     this.server.emit('device:update', device);
-    this.logger.debug(`Device update emitted: ${device._id}`);
+    this.logger.debug(`Device update emitted: ${device.id}`);
   }
 
   // Emit device status change (with optional metrics)
