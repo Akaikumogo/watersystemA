@@ -11,7 +11,7 @@ import { User } from '../auth/schemas/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { DevicesService } from '../devices/devices.service';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { toApiDoc, toApiDocs } from '../../common/utils/mongo-compat';
 
 @Injectable()

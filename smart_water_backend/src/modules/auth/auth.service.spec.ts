@@ -8,7 +8,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { DevicesService } from '../devices/devices.service';
 import { MqttService } from '../mqtt/mqtt.service';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 
 describe('AuthService', () => {
   let service: AuthService;
